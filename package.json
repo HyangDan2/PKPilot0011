@@ -1,0 +1,33 @@
+{
+  "name": "pkpilot0011",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "HD2Lab Film Studio x Shutterplate — an integrated photo and video plate studio",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "make-sample": "node tools/make-sample-clip.mjs"
+  },
+  "dependencies": {
+    "exifr": "7.1.3",
+    "mediabunny": "1.66.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.0",
+    "vitest": "^3.0.5"
+  }
+}

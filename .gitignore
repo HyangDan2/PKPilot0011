@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-ssr/
+.playwright-artifacts/
+*.local
+.DS_Store
+*.tmp.mjs
+smoke*.mjs
