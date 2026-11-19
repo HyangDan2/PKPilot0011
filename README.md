@@ -66,7 +66,7 @@ HD2Lab의 사진 색보정 스튜디오(Film Studio)와 프레임 인화 엔진(
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/PKPilot0011/
-npm test           # Vitest 46개 (색보정·필터·플레이트 레이아웃·트림/코덱·리듀서)
+npm test           # Vitest 55개 (색보정·LUT·필터·플레이트 레이아웃·트림/코덱·리듀서)
 npm run build      # tsc --noEmit && vite build
 npm run preview    # http://localhost:4173/PKPilot0011/
 npm run test:e2e   # Playwright: 데스크톱/모바일 흐름 + 스크린샷 4장
@@ -112,6 +112,7 @@ tools/make-sample-clip.mjs
 - `tests/codecs.test.ts` — H.264→VP9→VP8 폴백, AAC 부재 시 무음, 짝수 해상도, 트림 프레임 그리드
 - `tests/media.test.ts` — 노출/초점/셔터 표기, EXIF → 메타, 파일 라우팅
 - `tests/studio.test.ts` — 리듀서(트림·프레임 강등·필터 리셋·날짜), 스테이지 피팅
+- `tests/engine.test.ts` — 실제 `.cube` LUT 파싱·항등 보간, 톤커브 텍스처, 시간 시드 그레인·HDR 가드 셰이더 계약
 - `tests/e2e/studio.spec.ts` — 1280×800과 390×844에서 랜딩 → 샘플 사진/영상 → 필터 모달 →
   프레임 모달, 콘솔 에러 0건, 캔버스 실제 픽셀 확인, 스크린샷 4장 저장
 
