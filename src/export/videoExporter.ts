@@ -118,19 +118,35 @@ export async function exportVideo(job: VideoExportJob): Promise<VideoExportResul
     const sink = new VideoSampleSink(track);
     const duration = 1 / Math.max(1, job.fps);
     let index = 0;
-    for await (const sample of sink.samplesAtTimestamps(timestamps)) {
+    // Decode the trim once, in order, and hold each decoded frame for every
+    // output timestamp that falls before the next one. A random-access lookup
+    // per timestamp re-seeks the decoder and turns a 6s clip into a 2-minute
+    // export; a sequential pass keeps it near real time.
+    for await (const sample of sink.samples(job.range.start, job.range.end)) {
       throwIfAborted(job.signal);
-      const seconds = timestamps[index];
-      await job.renderFrame(sample ? sample.toCanvasImageSource() : null, seconds, canvas);
-      await videoSource.add(Math.max(0, seconds - job.range.start), duration);
-      sample?.close();
-      index += 1;
-      if (index % 3 === 0 || index === timestamps.length) {
-        job.onProgress?.({
-          phase: 'render', current: index, total: timestamps.length,
-          message: `프레임 ${index} / ${timestamps.length} 인코딩`,
-        });
+      const nextTimestamp = sample.timestamp + (sample.duration || duration);
+      while (index < timestamps.length && timestamps[index] < nextTimestamp - 1e-6) {
+        const seconds = timestamps[index];
+        await job.renderFrame(sample.toCanvasImageSource(), seconds, canvas);
+        await videoSource.add(Math.max(0, seconds - job.range.start), duration);
+        index += 1;
+        if (index % 3 === 0 || index === timestamps.length) {
+          job.onProgress?.({
+            phase: 'render', current: index, total: timestamps.length,
+            message: `프레임 ${index} / ${timestamps.length} 인코딩`,
+          });
+        }
       }
+      sample.close();
+      if (index >= timestamps.length) break;
+    }
+    // Anything left over (a stream shorter than the requested range) is padded
+    // with the final plate rather than left as a shortened track.
+    while (index < timestamps.length) {
+      const seconds = timestamps[index];
+      await job.renderFrame(null, seconds, canvas);
+      await videoSource.add(Math.max(0, seconds - job.range.start), duration);
+      index += 1;
     }
 
     if (audioSource && audioBuffers) {
