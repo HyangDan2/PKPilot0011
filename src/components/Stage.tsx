@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
-import { buildPlateLayout, fitPhotoBox } from '../studio/render';
+import { buildPlateLayout, stageTypeBoost, virtualPhotoBox } from '../studio/render';
 import { PhotoGrader } from '../studio/grading';
+import { IconVolume, IconVolumeOff } from './Icons';
 import type { FrameSettings, GradeSettings, MediaInfo, PlateMeta, TrimRange } from '../types/studio';
-import { PREVIEW_MAX_EDGE, isMultiFrame } from '../types/studio';
+import { PLATE_BASE_EDGE, PREVIEW_MAX_EDGE, isMultiFrame } from '../types/studio';
 
 export interface MediaBank {
   photos: Map<string, HTMLImageElement>;
@@ -24,6 +25,9 @@ interface StageProps {
   showOriginal: boolean;
   inputGuard: 0 | 1;
   revision: number;
+  /** True while the source clip plays silently (the browser's autoplay rule). */
+  muted: boolean;
+  onToggleMute: () => void;
   onTime: (seconds: number) => void;
   onTogglePlay: () => void;
 }
@@ -39,9 +43,14 @@ const MAX_DPR = 2;
 /**
  * The live stage: one WebGL grade canvas feeding the Shutterplate painter, so
  * the preview is exactly the exported frame — filter, margins, emblem and all.
+ *
+ * The plate is designed at a virtual print size (long edge >= 1200px) and then
+ * scaled to whatever room the stage has. On a phone that scale is a third, so
+ * the plate is asked for a type boost in the same breath: the copy grows with
+ * the band while the photograph keeps its place.
  */
 export function Stage(props: StageProps) {
-  const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, onTime, onTogglePlay } = props;
+  const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, muted, onToggleMute, onTime, onTogglePlay } = props;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const graderRef = useRef<PhotoGrader | null>(null);
@@ -51,6 +60,8 @@ export function Stage(props: StageProps) {
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextLost, setContextLost] = useState(false);
+  const [contextEpoch, setContextEpoch] = useState(0);
   const [ratio, setRatio] = useState(1.5);
   const cssScale = useRef(1);
 
@@ -64,6 +75,25 @@ export function Stage(props: StageProps) {
   if (!graderRef.current && typeof document !== 'undefined') {
     graderRef.current = new PhotoGrader();
   }
+
+  /* ── a lost GL context is recoverable: say so, and rebuild on demand ─────── */
+  useEffect(() => {
+    const canvas = graderRef.current?.canvas;
+    if (!canvas) return;
+    const onLost = () => setContextLost(true);
+    const onRestored = () => setContextLost(false);
+    canvas.addEventListener('webglcontextlost', onLost);
+    canvas.addEventListener('webglcontextrestored', onRestored);
+    return () => {
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
+    };
+  }, []);
+
+  useEffect(() => () => {
+    graderRef.current?.destroy();
+    graderRef.current = null;
+  }, []);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -90,6 +120,14 @@ export function Stage(props: StageProps) {
     }
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, layout.W, layout.H);
+    // A small window onto what the stage decided, so a test can tell a
+    // designed-at-print-size plate from a phone-sized one.
+    canvas.dataset.plateSize = `${layout.W}x${layout.H}`;
+    canvas.dataset.typeBoost = String(layout.typeBoost ?? 1);
+    canvas.dataset.plateScale = cssScale.current.toFixed(3);
+    // The smallest row the frame prints, as the visitor actually sees it.
+    const smallestRow = Math.min((layout.uBase ?? layout.u) * (layout.typeBoost ?? 1) * 11, layout.band * 0.078);
+    canvas.dataset.minTypeCss = (smallestRow * cssScale.current).toFixed(2);
     plate.paint(ctx, layout);
   }, [plate, bank, video]);
 
@@ -98,6 +136,7 @@ export function Stage(props: StageProps) {
     if (!stageSize.width || !stageSize.height || !activeMedia) return;
     let cancelled = false;
     const painter = graderRef.current;
+    const room = { width: Math.max(60, stageSize.width - 8), height: Math.max(60, stageSize.height - 8) };
 
     const build = async () => {
       // Multi-cut plates grade each photograph separately and keep the pixels.
@@ -137,7 +176,7 @@ export function Stage(props: StageProps) {
         layoutRef.current = layout;
         // A four-cut plate is a fixed design size; fit it to the stage instead of
         // letting the canvas hang off the edge.
-        cssScale.current = Math.min(1, (stageSize.width - 8) / layout.W, (stageSize.height - 8) / layout.H);
+        cssScale.current = Math.min(1, room.width / layout.W, room.height / layout.H);
         canvasKey.current = '';
         setRatio(layout.W / layout.H);
         draw();
@@ -145,30 +184,28 @@ export function Stage(props: StageProps) {
         return;
       }
 
-      let photoBox = fitPhotoBox(
-        { width: Math.max(120, stageSize.width - 8), height: Math.max(120, stageSize.height - 8) },
-        { width: activeMedia.width, height: activeMedia.height },
-      );
-      let layout = buildPlateLayout({
-        plate, emblems, frame, meta,
-        photo: photoBox,
-        image: painter?.canvas ?? null,
-      });
+      // One virtual print size for every stage: no more phone-sized plate.
+      const base = virtualPhotoBox(activeMedia, PLATE_BASE_EDGE, PLATE_BASE_EDGE);
+      let photo = { width: base.width, height: base.height };
+      let layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null });
+      let scale = Math.min(1, room.width / layout.W, room.height / layout.H);
+
+      // Ask the plate for whatever type boost the display scale needs, then let
+      // the taller plate settle into the stage and repeat once so the boost is
+      // measured against the scale the visitor actually gets.
       for (let pass = 0; pass < 2; pass += 1) {
-        const overflow = Math.min(
-          (stageSize.width - 8) / layout.W,
-          (stageSize.height - 8) / layout.H,
-        );
-        if (overflow >= 0.995) break;
-        photoBox = {
-          width: Math.max(1, Math.floor(photoBox.width * overflow)),
-          height: Math.max(1, Math.floor(photoBox.height * overflow)),
-        };
-        layout = buildPlateLayout({ plate, emblems, frame, meta, photo: photoBox, image: painter?.canvas ?? null });
+        const boost = stageTypeBoost({ u: layout.W / 1000, band: layout.band, cssScale: scale });
+        if (boost <= 1.001) break;
+        const next = buildPlateLayout({
+          plate, emblems, frame, meta, photo, image: painter?.canvas ?? null, typeBoost: boost,
+        });
+        layout = next;
+        scale = Math.min(1, room.width / layout.W, room.height / layout.H);
       }
+
       if (cancelled) return;
       layoutRef.current = layout;
-      cssScale.current = 1;
+      cssScale.current = scale;
       setRatio(layout.W / layout.H);
       draw();
       setReady(true);
@@ -176,7 +213,7 @@ export function Stage(props: StageProps) {
 
     void build();
     return () => { cancelled = true; };
-  }, [stageSize, activeMedia, frame, meta, revision, plate, emblems, isMulti, media, bank, props.grade, draw]);
+  }, [stageSize, activeMedia, frame, meta, revision, plate, emblems, isMulti, media, bank, props.grade, draw, contextEpoch]);
 
   /* ── resize ─────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -221,7 +258,7 @@ export function Stage(props: StageProps) {
     };
     void run();
     return () => { cancelled = true; };
-  }, [activeMedia, bank, props.grade, draw, video, revision, showOriginal, isMulti, inputGuard]);
+  }, [activeMedia, bank, props.grade, draw, video, revision, showOriginal, isMulti, inputGuard, contextEpoch]);
 
   /* ── video playback loop ────────────────────────────────────────────────── */
   useEffect(() => {
@@ -262,6 +299,13 @@ export function Stage(props: StageProps) {
     return () => cancelAnimationFrame(raf);
   }, [video, activeMedia, draw, onTime]);
 
+  /* ── audio: the element follows the mute toggle ─────────────────────────── */
+  useEffect(() => {
+    if (!video) return;
+    video.muted = muted;
+    video.volume = 1;
+  }, [video, muted]);
+
   /* ── play/pause ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     if (!video) return;
@@ -269,7 +313,8 @@ export function Stage(props: StageProps) {
       const start = video.currentTime < trim.start || video.currentTime >= trim.end ? trim.start : video.currentTime;
       if (video.currentTime !== start) video.currentTime = start;
       void video.play().catch(() => {
-        /* Autoplay refused until the visitor taps; the poster frame stays. */
+        /* Autoplay with sound can be refused before the visitor taps; the
+           transport keeps the poster frame and the sound toggle stays visible. */
       });
     } else {
       video.pause();
@@ -308,9 +353,32 @@ export function Stage(props: StageProps) {
         />
         {error && <p className="stage-error">{error}</p>}
         {!ready && <div className="stage-skeleton" aria-hidden />}
+        {contextLost && (
+          <div className="stage-notice" role="status">
+            <p>그래픽 메모리가 부족해 미리보기를 잠시 멈췄습니다.</p>
+            <button type="button" className="btn small" onClick={() => setContextEpoch((value) => value + 1)}>
+              미리보기 다시 그리기
+            </button>
+          </div>
+        )}
       </div>
+
       {activeMedia?.kind === 'video' && (
-        <div className="stage-hint">길게 눌러 원본 비교 · 더블클릭으로 재생/일시정지</div>
+        <>
+          <button
+            type="button"
+            className={`mute-btn${muted ? ' is-muted' : ''}`}
+            aria-label={muted ? '소리 켜기' : '음소거'}
+            aria-pressed={!muted}
+            title={muted ? '소리 켜기' : '음소거'}
+            onClick={onToggleMute}
+            data-testid="mute-toggle"
+          >
+            {muted ? <IconVolumeOff size={16} /> : <IconVolume size={16} />}
+            <span>{muted ? '음소거' : '소리 켜짐'}</span>
+          </button>
+          <div className="stage-hint">길게 눌러 원본 비교 · 더블클릭으로 재생/일시정지</div>
+        </>
       )}
     </div>
   );

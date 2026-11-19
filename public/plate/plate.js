@@ -422,6 +422,19 @@
     if (band < Math.round(PW * 0.05)) band = Math.round(PW * 0.05);
 
     var W = PW + padX * 2;
+
+    /* On a phone the whole plate is shown at a third of its size, and type set
+       against the plate width (u = W/1000) fell to four or five screen pixels —
+       unreadable. The stage asks for a type boost instead: the band and the type
+       unit grow together while the photograph, its margin and the plate width
+       stay exactly where they are, so every row keeps its own spacing and the
+       copy reads at a phone's arm length. The export never asks for it, so a
+       1:1 print keeps the frame's designed proportions. */
+    var typeBoost = opts.typeBoost && Number(opts.typeBoost) > 1
+      ? Math.min(2.8, Number(opts.typeBoost))
+      : 1;
+    if (typeBoost > 1) band = Math.round(band * typeBoost);
+
     var H = padTop + PH + band;
 
     /* free aspect ratio (Pro Studio & the geometry sheet): the plate is
@@ -447,7 +460,9 @@
       ratio: ratio,
       inset: Math.max(padX, Math.round(W * 0.038)),
       radius: W * radiusPct / 100,
-      u: W / 1000,
+      u: (W / 1000) * typeBoost,
+      uBase: W / 1000,
+      typeBoost: typeBoost,
       photoBox: { x: pbx, y: padTop, w: PW, h: PH },
       emblem: opts.emblem === 'none' ? null : (opts.emblem || 'hd2lab'),
       img: photo.img
@@ -692,8 +707,9 @@
     var f = L.fields, c = L.colors, u = L.u, band = L.band;
     var top = L.photoBox.y + L.PH, cx = L.W / 2, maxW = L.W - L.inset * 2;
 
-    // upper deck — the camera & lens ride in the top margin
-    if (L.padTop > u * 26) {
+    // upper deck — the camera & lens ride in the top margin (measured against
+    // the plate's own unit, so a display type boost never hides the row)
+    if (L.padTop > (L.uBase || u) * 26) {
       text(ctx, join([camera(f), optics(f)], '   ·   '), cx, L.padTop * 0.62, {
         size: Math.min(u * 14, L.padTop * 0.4), family: 'mono', color: c.muted,
         ls: u * 1.3, align: 'center', maxW: maxW
@@ -1392,8 +1408,17 @@
   var MULTI_MAX_EDGE = 7200;
   var FYRA_DEFAULT = 'classic';
 
-  /* The six Nordic four-cut layouts, in the order the theme window lists them. */
+  /* The six Nordic four-cut layouts, in the order the theme window lists them,
+     then the four plates the studio's own 4-cut window opens with. */
   var FYRA_THEMES = [
+    { id: 'midnight', label: 'Midnight', layout: '1×4',
+      note: '미드나잇 스트립 · 새벽빛 오렌지' },
+    { id: 'snow', label: 'Snow', layout: '2×2',
+      note: '설백 그리드 · 차가운 회청 잉크' },
+    { id: 'forest', label: 'Forest', layout: '1×4',
+      note: '딥 포레스트 · 크림 잉크' },
+    { id: 'sand', label: 'Sand', layout: '2×2',
+      note: '모래빛 페이퍼 · 테라코타 액센트' },
     { id: 'classic', label: 'Classic Strip', layout: '1×4',
       note: '아이보리 스트립 · 하단 FYRA 04 / 날짜 / 엠블럼' },
     { id: 'nordic', label: 'Nordic Grid', layout: '2×2',
@@ -1409,6 +1434,10 @@
   ];
 
   var THEME_COLORS = {
+    midnight:  { base: '#0f1220', ink: '#f2eee4', muted: '#9aa0b4', line: 'rgba(242,238,228,0.16)', accent: '#ff824f', light: false },
+    snow:      { base: '#f7f8fa', ink: '#16181c', muted: '#6f7684', line: 'rgba(22,24,28,0.14)', accent: '#4a6b8a', light: true },
+    forest:    { base: '#12201a', ink: '#eaeade', muted: '#9fb2a1', line: 'rgba(234,234,222,0.16)', accent: '#c2703f', light: false },
+    sand:      { base: '#f3ead9', ink: '#241f19', muted: '#7a6a56', line: 'rgba(36,31,25,0.15)', accent: '#a8582c', light: true },
     classic:   { base: '#f4f1e8', ink: '#1e1d1a', muted: '#6f6a5f', line: 'rgba(30,29,26,0.18)', accent: '#b8452f', light: true },
     nordic:    { base: '#f6f3ec', ink: '#232220', muted: '#78736a', line: 'rgba(35,34,32,0.14)', accent: '#8a6a4e', light: true },
     dark:      { base: '#141516', ink: '#f2f0ea', muted: '#8e8c85', line: 'rgba(242,240,234,0.16)', accent: '#ff824f', light: false },
@@ -1458,6 +1487,10 @@
     var rows = cols === 2 ? 2 : 4;
     var side, top, gutter, band;
     if (theme === 'nordic')         { side = 56; top = 56;  gutter = 14; band = 96; }
+    else if (theme === 'midnight')  { side = 24; top = 28;  gutter = 12; band = 136; }
+    else if (theme === 'snow')      { side = 44; top = 44;  gutter = 10; band = 84; }
+    else if (theme === 'forest')    { side = 46; top = 40;  gutter = 12; band = 152; }
+    else if (theme === 'sand')      { side = 40; top = 70;  gutter = 12; band = 108; }
     else if (theme === 'dark')      { side = 24; top = 24;  gutter = 12; band = 132; }
     else if (theme === 'film')      { side = 46; top = 40;  gutter = 12; band = 152; }
     else if (theme === 'editorial') { side = 46; top = 118; gutter = 10; band = 130; }
@@ -1606,6 +1639,10 @@
   /* ── 13 FYRA 04 (six Nordic four-cut themes) ───────────────────────────── */
   function drawFyra(ctx, L) {
     var th = L.theme || FYRA_DEFAULT;
+    /* Midnight, Snow, Forest and Sand are their own palettes and their own
+       margins; each prints the footer the layout it borrows already solved. */
+    var ALIAS = { midnight: 'dark', snow: 'nordic', forest: 'film', sand: 'classic' };
+    if (ALIAS[th]) th = ALIAS[th];
     var c = L.colors, u = L.u, f = L.fields, W = L.W;
     var cells = L.cells;
     var last = cells[cells.length - 1];

@@ -44,6 +44,10 @@ export interface PlateLayout {
   radius: number;
   ratio: number;
   u: number;
+  /** The plate's own type unit, before any display type boost. */
+  uBase?: number;
+  /** 1 in every export; >1 only when the stage had to enlarge the copy. */
+  typeBoost?: number;
   photoBox: PlateCell;
   emblem: string | null;
   img: CanvasImageSource | null;
@@ -68,6 +72,8 @@ export interface PlateLayoutOptions {
   slotFields?: Partial<PlateMeta>[];
   font?: string;
   fyraTheme?: string;
+  /** Stage-only legibility compensation; never set for an export. */
+  typeBoost?: number;
 }
 
 export interface SPPlateApi {

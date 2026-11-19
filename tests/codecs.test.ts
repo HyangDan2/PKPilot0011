@@ -73,8 +73,8 @@ describe('frameTimestamps', () => {
 });
 
 describe('outputFileName', () => {
-  it('keeps the stem and appends the HD2Lab suffix', () => {
-    expect(outputFileName('sample-clip.mp4', 'mp4')).toBe('sample-clip-HD2Lab.mp4');
-    expect(outputFileName('no-extension', 'webm')).toBe('no-extension-HD2Lab.webm');
+  it('keeps the stem and appends the studio’s name', () => {
+    expect(outputFileName('sample-clip.mp4', 'mp4')).toBe('sample-clip-Nordlys.mp4');
+    expect(outputFileName('no-extension', 'webm')).toBe('no-extension-Nordlys.webm');
   });
 });

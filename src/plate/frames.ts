@@ -39,7 +39,17 @@ export function frameSupportsVideo(id: FrameId): boolean {
   return !isMultiFrame(id);
 }
 
+/** The eleven single-cut signatures, for the frame modal. */
+export const SINGLE_FRAME_DEFS: FrameDef[] = FRAMES.filter((frame) => frameSupportsVideo(frame.id));
+
+/** The two four-cut plates, for the 4-cut window. */
+export const MULTI_FRAME_DEFS: FrameDef[] = FRAMES.filter((frame) => !frameSupportsVideo(frame.id));
+
 export const FYRA_THEME_LABELS: { id: string; label: string }[] = [
+  { id: 'midnight', label: 'Midnight' },
+  { id: 'snow', label: 'Snow' },
+  { id: 'forest', label: 'Forest' },
+  { id: 'sand', label: 'Sand' },
   { id: 'nordic', label: 'Nordic' },
   { id: 'classic', label: 'Classic' },
   { id: 'dark', label: 'Dark' },

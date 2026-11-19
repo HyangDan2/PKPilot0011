@@ -1,6 +1,6 @@
 import { Modal } from './Modal';
 import { Segmented, Slider, Toggle } from './controls';
-import { FRAMES, FRAME_MAP, FYRA_THEME_LABELS } from '../plate/frames';
+import { FRAME_MAP, FYRA_THEME_LABELS, SINGLE_FRAME_DEFS } from '../plate/frames';
 import { Field } from './controls';
 import { IconCheck } from './Icons';
 import type { FrameId, FrameSettings, MediaKind, PlateMeta } from '../types/studio';
@@ -17,45 +17,8 @@ interface FrameModalProps {
   defaultPad: number;
 }
 
-const SINGLE = FRAMES.filter((frame) => frame.video || frame.id !== 'contact' && frame.id !== 'fyra04');
-const MULTI = FRAMES.filter((frame) => frame.id === 'contact' || frame.id === 'fyra04');
-
-function FrameGrid({ frames, frame, mediaKind, thumbs, onPatch }: {
-  frames: typeof FRAMES;
-  frame: FrameSettings;
-  mediaKind: MediaKind;
-  thumbs: Record<string, string>;
-  onPatch: (patch: Partial<FrameSettings>) => void;
-}) {
-  return (
-    <div className="frame-grid">
-      {frames.map((item) => {
-        const disabled = mediaKind === 'video' && !item.video;
-        const url = thumbs[item.id];
-        return (
-          <button
-            key={item.id}
-            type="button"
-            className={`frame-card${frame.style === item.id ? ' selected' : ''}${disabled ? ' disabled' : ''}`}
-            onClick={() => !disabled && onPatch({ style: item.id as FrameId })}
-            disabled={disabled}
-            aria-pressed={frame.style === item.id}
-            data-frame-id={item.id}
-            title={disabled ? '영상에는 사진 전용 4컷 프레임을 쓸 수 없습니다.' : item.blurb}
-          >
-            <span className="frame-thumb">
-              {url ? <img src={url} alt="" draggable={false} /> : <span className="thumb-shimmer" />}
-              {frame.style === item.id && <span className="frame-check"><IconCheck size={13} /></span>}
-              {disabled && <span className="frame-lock">사진 전용</span>}
-            </span>
-            <span className="frame-name">{FRAME_MAP[item.id].label}</span>
-            <span className="frame-tag">{item.tag}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+/** The eleven single-cut signatures. The two 4-up plates live in their own window. */
+const SINGLE = SINGLE_FRAME_DEFS;
 
 export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, onClose, defaultPad }: FrameModalProps) {
   const padValue = frame.padPct ?? defaultPad;
@@ -63,7 +26,7 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
     <Modal
       kicker="FRAME MODAL"
       title="프레임 선택"
-      description="지금 필터가 입혀진 화면으로 그린 13종 플레이트입니다. 여백과 잉크도 여기서 바로 바꿉니다."
+      description="지금 필터가 입혀진 화면으로 그린 단일 11종 플레이트입니다. 여백과 잉크도 여기서 바로 바꿉니다."
       onClose={onClose}
       size="wide"
       testId="frame-modal"
@@ -76,13 +39,33 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
     >
       <section className="filter-section">
         <h3 className="section-title">단일 11종 <small>사진 · 영상</small></h3>
-        <FrameGrid frames={SINGLE} frame={frame} mediaKind={mediaKind} thumbs={thumbs} onPatch={onPatch} />
-      </section>
-
-      <section className="filter-section">
-        <h3 className="section-title">4컷 2종 <small>사진 전용</small></h3>
-        <FrameGrid frames={MULTI} frame={frame} mediaKind={mediaKind} thumbs={thumbs} onPatch={onPatch} />
-        {mediaKind === 'video' && <p className="note">영상은 단일 11종만 지원합니다. 4컷 플레이트는 사진에서 사용하세요.</p>}
+        <div className="frame-grid">
+          {SINGLE.map((item) => {
+            const url = thumbs[item.id];
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`frame-card${frame.style === item.id ? ' selected' : ''}`}
+                onClick={() => onPatch({ style: item.id as FrameId })}
+                aria-pressed={frame.style === item.id}
+                data-frame-id={item.id}
+                title={item.blurb}
+              >
+                <span className="frame-thumb">
+                  {url ? <img src={url} alt="" draggable={false} /> : <span className="thumb-shimmer" />}
+                  {frame.style === item.id && <span className="frame-check"><IconCheck size={13} /></span>}
+                </span>
+                <span className="frame-name">{FRAME_MAP[item.id].label}</span>
+                <span className="frame-tag">{item.tag}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="note">
+          4컷 플레이트 2종(Contact Sheet · FYRA 04)은 우측 하단의 4컷 버튼에서 엽니다.
+          {mediaKind === 'video' ? ' 영상은 단일 11종으로 인화합니다.' : ''}
+        </p>
       </section>
 
       <section className="frame-options">

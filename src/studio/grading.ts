@@ -62,6 +62,13 @@ export class PhotoGrader {
     return this.engine.isReady();
   }
 
+  /** The GPU's own texture ceiling; the export cap never exceeds it. */
+  get maxTextureSize(): number {
+    const gl = this.engine.getContext();
+    const value = gl ? Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) : 0;
+    return Number.isFinite(value) && value > 0 ? value : 4096;
+  }
+
   /** True once the LUT for this film is uploaded and a synchronous frame is safe. */
   isPrepared(grade: GradeSettings): boolean {
     if (!this.engine.isReady()) return false;

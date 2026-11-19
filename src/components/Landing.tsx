@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { FRAMES } from '../plate/frames';
-import { IconPhoto, IconVideo, IconArrowLeft, IconSpark } from './Icons';
+import { IconArrowLeft, IconPhoto, IconSpark, IconVideo } from './Icons';
+import { routeFiles } from '../media/route';
 import type { FrameId } from '../types/studio';
 
 export interface SampleItem {
@@ -15,7 +16,7 @@ export const SAMPLES: SampleItem[] = [
   { id: 'sample-01', label: 'Landscape', kind: 'photo', path: 'samples/sample-01.jpg', caption: '1350 × 900 · 컬러' },
   { id: 'sample-02', label: 'Cafe Portrait', kind: 'photo', path: 'samples/sample-02.jpg', caption: '세로 인물 · 카페' },
   { id: 'portrait_test', label: 'Studio Portrait', kind: 'photo', path: 'samples/portrait_test.png', caption: '스튜디오 인물' },
-  { id: 'sample-clip', label: 'Sample Clip', kind: 'video', path: 'samples/sample-clip.mp4', caption: '6초 · 1280×720 · 30fps' },
+  { id: 'sample-clip', label: 'Sample Clip', kind: 'video', path: 'samples/sample-clip.mp4', caption: '6초 · 1280×720 · 30fps · 사운드' },
 ];
 
 interface LandingProps {
@@ -31,28 +32,42 @@ interface LandingProps {
   onDismissError: () => void;
 }
 
+/** The HD2Lab dual-skew mark: two hollow parallelograms, never a filled blob. */
+export function HD2LabMark({ size = 30 }: { size?: number }) {
+  return (
+    <span className="brand-mark" aria-hidden style={{ width: size, height: size }}>
+      <svg viewBox="0 0 64 64" role="presentation">
+        <path
+          d="M15 20L35 10V43L15 53ZM29 24L49 14V47L29 57Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4.2"
+          strokeLinejoin="miter"
+        />
+      </svg>
+    </span>
+  );
+}
+
 export function Landing(props: LandingProps) {
-  const photoInput = useRef<HTMLInputElement | null>(null);
-  const videoInput = useRef<HTMLInputElement | null>(null);
+  const input = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
 
   const route = (files: File[]) => {
-    const video = files.find((file) => file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v)$/i.test(file.name));
-    if (video) { props.onOpenVideo(video); return; }
-    const photos = files.filter((file) => file.type.startsWith('image/') || /\.(jpe?g|png|webp)$/i.test(file.name));
-    if (photos.length) props.onOpenPhotos(photos.slice(0, 4));
+    const picked = routeFiles(files);
+    if (!picked) return;
+    if (picked.kind === 'video') props.onOpenVideo(picked.file);
+    else props.onOpenPhotos(picked.files);
   };
 
   return (
     <div className="landing">
       <div className="landing-scroll">
         <header className="landing-top">
-          <span className="brand-mark" aria-hidden>
-            <svg viewBox="0 0 64 64"><path d="M15 20L35 10V43L15 53ZM29 24L49 14V47L29 57Z" fill="currentColor" /></svg>
-          </span>
+          <HD2LabMark size={26} />
           <span className="brand-word">HD2Lab</span>
-          <span className="brand-div">/</span>
-          <span className="brand-sub">PKPilot 0011</span>
+          <span className="brand-div">|</span>
+          <span className="brand-sub">Nordlys</span>
           <span className="brand-badge">STUDIO</span>
         </header>
 
@@ -61,7 +76,7 @@ export function Landing(props: LandingProps) {
           <h1>한 장의 사진도,<br /><em>움직이는 클립도</em> 하나의 플레이트로.</h1>
           <p className="hero-copy">
             9종 HD2Lab 필름과 RETRO 90, 58종 Margarine 룩을 영상 프레임에 실시간으로 입히고,
-            Shutterplate의 13종 프레임으로 인화합니다. 사진은 원본 1:1로, 영상은 H.264로.
+            Shutterplate의 13종 프레임으로 인화합니다. 사진은 원본 1:1로, 영상은 H.264 + 사운드로.
             모든 처리는 이 기기 안에서만 일어납니다 — 업로드 0 B.
           </p>
           <div className="hero-stats">
@@ -84,7 +99,7 @@ export function Landing(props: LandingProps) {
         )}
 
         <section
-          className={`open-grid${dragging ? ' dragging' : ''}`}
+          className={`open-grid single${dragging ? ' dragging' : ''}`}
           onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => {
@@ -93,15 +108,25 @@ export function Landing(props: LandingProps) {
             route(Array.from(event.dataTransfer.files));
           }}
         >
-          <button type="button" className="open-card" onClick={() => photoInput.current?.click()} disabled={!!props.busy}>
-            <span className="open-icon"><IconPhoto size={26} /></span>
-            <strong>사진 열기</strong>
-            <span>JPEG · PNG · WebP<br />4컷 플레이트는 최대 4장</span>
-          </button>
-          <button type="button" className="open-card" onClick={() => videoInput.current?.click()} disabled={!!props.busy}>
-            <span className="open-icon video"><IconVideo size={26} /></span>
-            <strong>영상 열기</strong>
-            <span>MP4 · MOV · WebM<br />재생·스크럽·트림 후 인코딩</span>
+          <button
+            type="button"
+            className="open-card wide"
+            onClick={() => input.current?.click()}
+            disabled={!!props.busy}
+            data-testid="open-any"
+          >
+            <span className="open-icons" aria-hidden>
+              <span className="open-icon"><IconPhoto size={24} /></span>
+              <span className="open-icon video"><IconVideo size={24} /></span>
+            </span>
+            <span className="open-copy">
+              <strong>사진 · 영상 열기</strong>
+              <span>
+                JPEG · PNG · WebP · MP4 · MOV · WebM<br />
+                사진은 최대 4장(4컷 플레이트), 영상은 재생·트림 후 인코딩
+              </span>
+            </span>
+            <span className="open-cta">파일 선택 →</span>
           </button>
           <p className="drop-hint">여기로 끌어다 놓아도 됩니다 · 영상과 사진을 함께 놓으면 영상이 열립니다</p>
         </section>
@@ -163,7 +188,7 @@ export function Landing(props: LandingProps) {
         </section>
 
         <footer className="landing-foot">
-          <span>HD2Lab · PKPilot 0011 — Film Studio × Shutterplate</span>
+          <span>HD2Lab · Nordlys — Film Studio × Shutterplate</span>
           <span>브라우저 로컬 처리 · WebGL2 + WebCodecs</span>
         </footer>
       </div>
@@ -184,25 +209,15 @@ export function Landing(props: LandingProps) {
       )}
 
       <input
-        ref={photoInput}
+        ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/*,video/*,.mp4,.mov,.webm,.m4v"
         multiple
         hidden
+        data-testid="open-input"
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
-          if (files.length) props.onOpenPhotos(files.slice(0, 4));
-          event.target.value = '';
-        }}
-      />
-      <input
-        ref={videoInput}
-        type="file"
-        accept="video/mp4,video/quicktime,video/webm"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) props.onOpenVideo(file);
+          if (files.length) route(files);
           event.target.value = '';
         }}
       />

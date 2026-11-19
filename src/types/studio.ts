@@ -135,4 +135,7 @@ export const DEFAULT_VIDEO_EXPORT: VideoExportOptions = {
 };
 
 /** Preview is capped so a phone does not cook while scrubbing a 4K clip. */
-export const PREVIEW_MAX_EDGE = 1280;
+export const PREVIEW_MAX_EDGE = 1080;
+
+/** The stage designs every plate at this long edge, then scales to the room it has. */
+export const PLATE_BASE_EDGE = 1200;

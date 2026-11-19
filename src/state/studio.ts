@@ -12,7 +12,7 @@ import {
 } from '../types/studio';
 import { DEFAULT_FILTER, gradeForFilter } from '../filters/catalog';
 
-export type ModalKind = 'filter' | 'frame' | 'adjust' | 'export' | null;
+export type ModalKind = 'filter' | 'frame' | 'fourcut' | 'colorlab' | 'tonecurve' | 'camera' | 'adjust' | 'export' | null;
 
 export interface StudioState {
   media: MediaInfo[];
@@ -67,6 +67,8 @@ export type StudioAction =
   | { type: 'open-photos'; media: MediaInfo[] }
   | { type: 'open-video'; media: MediaInfo }
   | { type: 'add-photos'; media: MediaInfo[] }
+  | { type: 'set-photo'; index: number; media: MediaInfo }
+  | { type: 'remove-photo'; index: number }
   | { type: 'clear-media' }
   | { type: 'set-active-photo'; index: number }
   | { type: 'select-filter'; filter: FilterSelection }
@@ -116,6 +118,21 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
       };
     case 'add-photos':
       return { ...state, media: [...state.media, ...action.media], revision: state.revision + 1 };
+    case 'set-photo': {
+      if (action.index < 0 || action.index >= state.media.length) return state;
+      const media = state.media.map((item, index) => index === action.index ? action.media : item);
+      return { ...state, media, revision: state.revision + 1 };
+    }
+    case 'remove-photo': {
+      if (action.index < 0 || action.index >= state.media.length) return state;
+      const media = state.media.filter((_, index) => index !== action.index);
+      return {
+        ...state,
+        media,
+        activePhoto: Math.max(0, Math.min(media.length - 1, state.activePhoto)),
+        revision: state.revision + 1,
+      };
+    }
     case 'open-video':
       return {
         ...state,

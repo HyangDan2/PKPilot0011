@@ -113,3 +113,103 @@ export const IconTrim = (p: IconProps) => (
 export const IconSpark = (p: IconProps) => (
   <svg {...base(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8" /></svg>
 );
+
+export const IconVolume = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" />
+    <path d="M16 9a4.2 4.2 0 0 1 0 6M18.6 6.4a8 8 0 0 1 0 11.2" />
+  </svg>
+);
+
+export const IconVolumeOff = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" />
+    <path d="m16 9.5 5 5M21 9.5l-5 5" />
+  </svg>
+);
+
+export const IconSwap = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 8h11l-3-3M20 16H9l3 3" />
+  </svg>
+);
+
+export const IconDots = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IconHome = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 10.5 12 4l8 6.5V20H4z" />
+    <path d="M9.5 20v-6h5v6" />
+  </svg>
+);
+
+export const IconRefresh = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M20 12a8 8 0 1 1-2.6-5.9" />
+    <path d="M20 4v4.5h-4.5" />
+  </svg>
+);
+
+export const IconImage = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="m4 17 5-5 4 4 3-3 4 4" />
+  </svg>
+);
+
+export const IconExternal = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M14 4h6v6M20 4l-8 8" />
+    <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </svg>
+);
+
+export const IconStamp = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M8 8.5a4 4 0 0 1 8 0c0 1.6-.8 2.4-1.3 3.5h-5.4C8.8 10.9 8 10.1 8 8.5Z" />
+    <path d="M6.5 15.5h11M5 19.5h14" />
+  </svg>
+);
+
+export const IconApps = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+  </svg>
+);
+
+/** Palette — Color Lab. */
+export const IconPalette = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3.2a8.8 8.8 0 1 0 0 17.6c1.3 0 2-.9 2-1.9 0-1.5-1.4-1.7-1.4-3 0-1 .8-1.8 1.9-1.8h1.9a4.6 4.6 0 0 0 4.6-4.6C21 6.2 17.1 3.2 12 3.2Z" />
+    <circle cx="8.4" cy="9.2" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="7.4" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="15.6" cy="9.2" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/** Spline — Tone Curve. */
+export const IconSpline = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3.5 20c3.4 0 4.2-5.4 7-8.4 2.6-2.8 4.6-5 9.5-5" />
+    <circle cx="3.5" cy="20" r="1.7" />
+    <circle cx="20" cy="6.6" r="1.7" />
+  </svg>
+);
+
+/** Camera — Camera Effects. */
+export const IconCamera = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 8.5h3.4L8 6h8l1.6 2.5H21v10.2H3z" />
+    <circle cx="12" cy="13.3" r="3.2" />
+  </svg>
+);

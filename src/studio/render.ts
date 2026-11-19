@@ -17,6 +17,53 @@ export function fitPhotoBox(stage: StageBox, media: { width: number; height: num
   return { width: Math.max(1, Math.floor(mediaW * scale)), height: Math.max(1, Math.floor(mediaH * scale)) };
 }
 
+/**
+ * The box a plate is designed at, independent of how big the stage happens to
+ * be. Designing the plate at the phone's ~350px stage quantised every row down
+ * to a few pixels of type; keeping the geometry at a real print size and
+ * scaling the finished canvas to the stage keeps the plate's own proportions.
+ */
+export function virtualPhotoBox(
+  media: { width: number; height: number },
+  minLongEdge = 1200,
+  maxLongEdge = 1600,
+): { width: number; height: number; scale: number } {
+  const w = Math.max(1, Math.round(media.width) || 1);
+  const h = Math.max(1, Math.round(media.height) || 1);
+  const long = Math.max(w, h);
+  const target = Math.min(maxLongEdge, Math.max(minLongEdge, long));
+  const scale = target / long;
+  return {
+    width: Math.max(2, Math.round(w * scale)),
+    height: Math.max(2, Math.round(h * scale)),
+    scale,
+  };
+}
+
+/**
+ * How much the plate's type has to grow for a phone to read it. The smallest
+ * row a frame prints is about `u * 11` (or `band * 0.078`, whichever is
+ * tighter); once that is multiplied by the display scale it has to stay above
+ * a legible floor. The answer is 1 on a desktop, where the plate is already
+ * nearly full size.
+ */
+export function stageTypeBoost(input: {
+  u: number;
+  band: number;
+  cssScale: number;
+  targetCssPx?: number;
+  maxBoost?: number;
+}): number {
+  const target = input.targetCssPx ?? 10.4;
+  const max = input.maxBoost ?? 2.6;
+  const cssScale = Math.min(1, Math.max(0.01, input.cssScale));
+  const smallestRow = Math.max(0.01, Math.min(input.u * 11, input.band * 0.078));
+  const onScreen = smallestRow * cssScale;
+  if (onScreen >= target) return 1;
+  const boost = Math.ceil((target / onScreen) * 100) / 100;
+  return Math.min(max, Math.max(1, boost));
+}
+
 export function resolveEmblem(frame: FrameSettings, meta: PlateMeta, emblems?: SPEmblemsApi | null): string {
   if (frame.emblem === 'none') return 'none';
   if (frame.emblem === 'auto') return emblemForMake(meta.make, emblems);
@@ -33,6 +80,8 @@ export interface PlateRequest {
   image: CanvasImageSource | null;
   /** Up to four graded images for the multi-cut plates. */
   slots?: PlateImage[];
+  /** Stage-only legibility compensation, passed through to the engine. */
+  typeBoost?: number;
 }
 
 export function buildPlateLayout(request: PlateRequest): PlateLayout {
@@ -45,6 +94,7 @@ export function buildPlateLayout(request: PlateRequest): PlateLayout {
     padPct: frame.padPct,
     extraPct: frame.extraPct,
   };
+  const stageOptions = request.typeBoost && request.typeBoost > 1 ? { typeBoost: request.typeBoost } : {};
   if (isMultiFrame(frame.style)) {
     return plate.multiLayout({
       ...base,
@@ -55,7 +105,7 @@ export function buildPlateLayout(request: PlateRequest): PlateLayout {
   }
   const first = plate.layout(
     { w: request.photo.width, h: request.photo.height, img: request.image },
-    { ...base, style: frame.style },
+    { ...base, style: frame.style, ...stageOptions },
   );
   // A generous margin can make the plate wider than the stage; recompute once
   // with the photo box scaled by the overflow so the whole plate always fits.

@@ -1,9 +1,9 @@
-import type { SPEmblemsApi, SPPlateApi } from '../plate/engine';
+import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
 import type { FrameSettings, MediaInfo, PlateMeta, TrimRange, VideoExportOptions } from '../types/studio';
 import { buildPlateLayout } from './render';
 import { PhotoGrader } from './grading';
 import { exportVideo, type ExportProgress, type VideoExportResult } from '../export/videoExporter';
-import { exportDimensions } from '../export/codecs';
+import { clampPlateSize, evenSize, plateEdgeCap } from '../export/codecs';
 import type { GradeSettings } from '../types/studio';
 
 export interface StillExportContext {
@@ -26,7 +26,17 @@ export interface StillResult {
   height: number;
 }
 
-function paintTo(canvas: HTMLCanvasElement, plate: SPPlateApi, layout: ReturnType<typeof buildPlateLayout>): void {
+/** A finished export, cached so the share sheet opens from the tap itself. */
+export interface PreparedFile {
+  file: File;
+  filename: string;
+  width: number;
+  height: number;
+  note?: string;
+  mode?: 'webcodecs' | 'mediarecorder';
+}
+
+function paintTo(canvas: HTMLCanvasElement, plate: SPPlateApi, layout: PlateLayout): void {
   canvas.width = Math.max(1, Math.round(layout.W));
   canvas.height = Math.max(1, Math.round(layout.H));
   const ctx = canvas.getContext('2d');
@@ -75,7 +85,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
     const stem = media.name.replace(/\.[^.]+$/, '') || 'plate';
     return {
       blob,
-      filename: `${stem}-HD2Lab.${format === 'png' ? 'png' : 'jpg'}`,
+      filename: `${stem}-Nordlys.${format === 'png' ? 'png' : 'jpg'}`,
       width: canvas.width,
       height: canvas.height,
     };
@@ -96,9 +106,42 @@ export interface MovieExportContext {
   inputGuard?: 0 | 1;
 }
 
+/** What the finished movie plate will be, before a single frame is encoded. */
+export async function planMoviePlate(
+  context: MovieExportContext,
+  options: VideoExportOptions,
+  grader: PhotoGrader,
+): Promise<{ layout: PlateLayout; photo: { width: number; height: number } }> {
+  await grader.prepare(context.grade);
+  const cap = plateEdgeCap(options.resolution, grader.maxTextureSize);
+  const requested = {
+    width: Math.max(2, context.media.width),
+    height: Math.max(2, context.media.height),
+  };
+  const scale = Math.min(1, cap / Math.max(requested.width, requested.height));
+  const planned = clampPlateSize({
+    photo: {
+      width: Math.max(2, Math.round(requested.width * scale)),
+      height: Math.max(2, Math.round(requested.height * scale)),
+    },
+    cap,
+    layoutFor: (photo) => buildPlateLayout({
+      plate: context.plate, emblems: context.emblems, frame: context.frame, meta: context.meta,
+      photo, image: grader.canvas,
+    }),
+    minPhoto: 96,
+  });
+  // The encoder refuses an odd dimension, so the plate itself is set on the
+  // even grid — 1081px of band becomes 1080px of band, nothing else moves.
+  planned.layout.W = evenSize(planned.layout.W);
+  planned.layout.H = evenSize(planned.layout.H);
+  return planned;
+}
+
 /**
  * Export the trimmed clip: decode → grade → plate → encode. The plate geometry
- * is fixed from the first render so every frame lines up exactly.
+ * is fixed from the first render so every frame lines up exactly, and it is
+ * measured (and capped) *before* the encoder is probed.
  */
 export async function exportMovie(
   context: MovieExportContext,
@@ -107,26 +150,25 @@ export async function exportMovie(
   signal?: AbortSignal,
 ): Promise<VideoExportResult> {
   const grader = new PhotoGrader();
-  const target = exportDimensions(options.resolution, context.media.width, context.media.height);
-  let layout: ReturnType<typeof buildPlateLayout> | null = null;
-
-  const renderFrame = async (source: CanvasImageSource | null, seconds: number, out: HTMLCanvasElement) => {
-    if (source) {
-      await grader.render({ source, grade: context.grade, width: target.width, height: target.height, time: seconds, inputGuard: context.inputGuard });
-    }
-    if (!layout) {
-      layout = buildPlateLayout({
-        plate: context.plate, emblems: context.emblems, frame: context.frame, meta: context.meta,
-        photo: { width: target.width, height: target.height },
-        image: grader.canvas,
-      });
-      out.width = Math.max(1, Math.round(layout.W));
-      out.height = Math.max(1, Math.round(layout.H));
-    }
-    paintTo(out, context.plate, layout);
-  };
-
   try {
+    const planned = await planMoviePlate(context, options, grader);
+    const layout = planned.layout;
+    const photo = planned.photo;
+
+    const renderFrame = async (source: CanvasImageSource | null, seconds: number, out: HTMLCanvasElement) => {
+      if (source) {
+        await grader.render({
+          source, grade: context.grade, width: photo.width, height: photo.height,
+          time: seconds, inputGuard: context.inputGuard,
+        });
+      }
+      if (out.width !== layout.W || out.height !== layout.H) {
+        out.width = layout.W;
+        out.height = layout.H;
+      }
+      paintTo(out, context.plate, layout);
+    };
+
     return await exportVideo({
       file: context.file,
       range: context.trim,
@@ -135,6 +177,8 @@ export async function exportMovie(
       sourceWidth: context.media.width,
       sourceHeight: context.media.height,
       includeAudio: options.includeAudio,
+      outputWidth: layout.W,
+      outputHeight: layout.H,
       renderFrame,
       onProgress,
       signal,
@@ -156,15 +200,48 @@ export function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export async function shareBlob(blob: Blob, filename: string, title: string): Promise<'shared' | 'downloaded'> {
-  const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+export function toFile(blob: Blob, filename: string, type?: string): File {
+  return new File([blob], filename, { type: type || blob.type || 'application/octet-stream' });
+}
+
+/** Can this browser hand a file to the OS share sheet (gallery, AirDrop, Kakao)? */
+export function canShareFile(file: File): boolean {
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-  if (navigator.share && nav.canShare?.({ files: [file] })) {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false;
+  try {
+    return nav.canShare ? nav.canShare({ files: [file] }) : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Open the share sheet. This must be called straight from the tap — an `await`
+ * anywhere before it burns the browser's transient activation and the sheet
+ * silently turns into a download.
+ */
+export function shareFile(file: File, title: string): void {
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function' || !nav.canShare?.({ files: [file] })) {
+    downloadBlob(file, file.name);
+    return;
+  }
+  try {
+    void navigator.share({ files: [file], title }).catch(() => undefined);
+  } catch {
+    downloadBlob(file, file.name);
+  }
+}
+
+export async function shareBlob(blob: Blob, filename: string, title: string): Promise<'shared' | 'downloaded'> {
+  const file = toFile(blob, filename);
+  if (canShareFile(file)) {
     try {
       await navigator.share({ files: [file], title });
       return 'shared';
     } catch {
-      /* the visitor dismissed the sheet — fall through to a download */
+      // The visitor closed the sheet: respect that and do not force a download.
+      return 'shared';
     }
   }
   downloadBlob(blob, filename);
