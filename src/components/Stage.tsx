@@ -61,6 +61,7 @@ export function Stage(props: StageProps) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contextLost, setContextLost] = useState(false);
+  const [glUnavailable, setGlUnavailable] = useState(false);
   const [contextEpoch, setContextEpoch] = useState(0);
   const [ratio, setRatio] = useState(1.5);
   const cssScale = useRef(1);
@@ -80,8 +81,16 @@ export function Stage(props: StageProps) {
   useEffect(() => {
     const canvas = graderRef.current?.canvas;
     if (!canvas) return;
-    const onLost = () => setContextLost(true);
-    const onRestored = () => setContextLost(false);
+    const onLost = () => {
+      setContextLost(true);
+      // Repaint at once, so the plate falls back to the ungraded frame instead
+      // of staying blank while the visitor reads the notice.
+      setContextEpoch((value) => value + 1);
+    };
+    const onRestored = () => {
+      setContextLost(false);
+      setContextEpoch((value) => value + 1);
+    };
     canvas.addEventListener('webglcontextlost', onLost);
     canvas.addEventListener('webglcontextrestored', onRestored);
     return () => {
@@ -206,6 +215,7 @@ export function Stage(props: StageProps) {
       if (cancelled) return;
       layoutRef.current = layout;
       cssScale.current = scale;
+      setGlUnavailable(!(painter?.available ?? false));
       setRatio(layout.W / layout.H);
       draw();
       setReady(true);
@@ -358,6 +368,14 @@ export function Stage(props: StageProps) {
             <p>그래픽 메모리가 부족해 미리보기를 잠시 멈췄습니다.</p>
             <button type="button" className="btn small" onClick={() => setContextEpoch((value) => value + 1)}>
               미리보기 다시 그리기
+            </button>
+          </div>
+        )}
+        {!contextLost && glUnavailable && (
+          <div className="stage-notice" role="status">
+            <p>이 기기에서는 실시간 필터를 그릴 수 없어 원본으로 표시합니다.</p>
+            <button type="button" className="btn small" onClick={() => setContextEpoch((value) => value + 1)}>
+              다시 시도
             </button>
           </div>
         )}
