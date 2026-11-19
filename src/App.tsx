@@ -103,8 +103,13 @@ export default function App() {
     if (stored === 'light' || stored === 'dark') dispatch({ type: 'set-theme', theme: stored });
   }, []);
   useEffect(() => {
-    document.documentElement.dataset.theme = state.theme;
+    const root = document.documentElement;
+    root.dataset.theme = state.theme;
     localStorage.setItem(THEME_KEY, state.theme);
+    /* A layer painted from themed gradients can keep its old pixels when only
+       the custom properties change; one inherited-property change invalidates
+       the whole tree so the swap is complete without a scroll. */
+    root.style.setProperty('--theme-rev', String(Date.now()));
   }, [state.theme]);
 
   /* ── media loading ──────────────────────────────────────────────────────── */
