@@ -65,6 +65,8 @@ export function Stage(props: StageProps) {
   const [contextEpoch, setContextEpoch] = useState(0);
   const [ratio, setRatio] = useState(1.5);
   const cssScale = useRef(1);
+  /** True once the GPU proved it cannot paint: the plate then shows the source pixels. */
+  const rawFallback = useRef(false);
 
   const activeMedia = media[props.activePhoto] ?? media[0] ?? null;
   const video = activeMedia?.kind === 'video' ? bank.video : null;
@@ -89,6 +91,7 @@ export function Stage(props: StageProps) {
     };
     const onRestored = () => {
       setContextLost(false);
+      rawFallback.current = false;
       setContextEpoch((value) => value + 1);
     };
     canvas.addEventListener('webglcontextlost', onLost);
@@ -121,7 +124,7 @@ export function Stage(props: StageProps) {
       canvas.style.height = `${Math.round(layout.H * cssScale.current)}px`;
       canvasKey.current = key;
     }
-    if (painter && !painter.available && live.current.activeMedia) {
+    if (painter && (!painter.available || rawFallback.current) && live.current.activeMedia) {
       const fallback = live.current.activeMedia.kind === 'photo'
         ? bank.photos.get(live.current.activeMedia.url) ?? null
         : video;
@@ -253,6 +256,10 @@ export function Stage(props: StageProps) {
         const size = previewGradeSize(activeMedia);
         try {
           await painter.render({ source: image, grade: props.grade, width: size.width, height: size.height, compareMode });
+          if (!cancelled && !painter.hasPixels()) {
+            rawFallback.current = true;
+            setGlUnavailable(true);
+          }
         } catch (err) {
           if (!cancelled) setError(err instanceof Error ? err.message : '사진을 처리하지 못했습니다.');
           return;

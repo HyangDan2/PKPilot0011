@@ -69,6 +69,30 @@ export class PhotoGrader {
     return Number.isFinite(value) && value > 0 ? value : 4096;
   }
 
+  /**
+   * Did the last grade actually put pixels on this canvas? A driver that
+   * accepts a WebGL2 context but draws nothing (blacklisted GPU, broken
+   * software rasteriser) would otherwise leave a blank plate on screen with
+   * no error raised anywhere.
+   */
+  hasPixels(): boolean {
+    if (!this.engine.isReady()) return false;
+    const width = Math.min(8, this.canvas.width);
+    const height = Math.min(8, this.canvas.height);
+    if (!(width > 0) || !(height > 0)) return false;
+    const pixels = this.engine.readPixels(
+      Math.max(0, (this.canvas.width >> 1) - 4),
+      Math.max(0, (this.canvas.height >> 1) - 4),
+      width,
+      height,
+    );
+    if (!pixels) return false;
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] !== 0) return true;
+    }
+    return false;
+  }
+
   /** True once the LUT for this film is uploaded and a synchronous frame is safe. */
   isPrepared(grade: GradeSettings): boolean {
     if (!this.engine.isReady()) return false;
