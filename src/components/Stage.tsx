@@ -29,6 +29,8 @@ interface StageProps {
   muted: boolean;
   onToggleMute: () => void;
   onTime: (seconds: number) => void;
+  /** The element's own `durationchange`: the cut and the spec row follow it. */
+  onDuration: (seconds: number) => void;
   onTogglePlay: () => void;
 }
 
@@ -50,7 +52,7 @@ const MAX_DPR = 2;
  * the band while the photograph keeps its place.
  */
 export function Stage(props: StageProps) {
-  const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, muted, onToggleMute, onTime, onTogglePlay } = props;
+  const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, muted, onToggleMute, onTime, onDuration, onTogglePlay } = props;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const graderRef = useRef<PhotoGrader | null>(null);
@@ -142,6 +144,33 @@ export function Stage(props: StageProps) {
     canvas.dataset.minTypeCss = (smallestRow * cssScale.current).toFixed(2);
     plate.paint(ctx, layout);
   }, [plate, bank, video]);
+
+  /**
+   * Grade and paint whatever the element shows right now. Returns false when
+   * there is nothing safe to paint yet (no LUT, no decoded frame), so callers
+   * can keep the frame already on the plate instead of drawing a blank one.
+   */
+  const paintSourceFrame = useCallback(() => {
+    const painter = graderRef.current;
+    const media = live.current.activeMedia;
+    if (!painter || !video || !media || media.kind !== 'video') return false;
+    if (video.readyState < 2) return false;
+    const state = live.current;
+    const size = previewGradeSize(media);
+    const painted = painter.renderNow({
+      source: video,
+      grade: state.grade,
+      width: size.width,
+      height: size.height,
+      time: video.currentTime,
+      compareMode: state.showOriginal ? 'original' : 'none',
+      inputGuard: state.inputGuard,
+    }, state.grade);
+    if (!painted) return false;
+    draw();
+    onTime(video.currentTime);
+    return true;
+  }, [video, draw, onTime]);
 
   /* ── plate geometry ─────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -267,7 +296,10 @@ export function Stage(props: StageProps) {
       } else if (video) {
         const size = previewGradeSize(activeMedia);
         await painter.prepare(props.grade).catch(() => undefined);
-        if (!cancelled && video.readyState >= 2) {
+        if (cancelled) return;
+        // The LUT is in: force the current frame onto the plate now instead of
+        // waiting for the playback loop's next tick.
+        if (video.readyState >= 2) {
           painter.renderNow({ source: video, grade: props.grade, width: size.width, height: size.height, time: video.currentTime, compareMode, inputGuard }, props.grade);
         }
       }
@@ -287,8 +319,9 @@ export function Stage(props: StageProps) {
     const loop = () => {
       raf = requestAnimationFrame(loop);
       const state = live.current;
-      if (state.trim.end <= 0) return;
-      if (state.playing) {
+      // Only a known cut loops or clamps the clip: with no end yet, playing
+      // must not be pinned to 0s.
+      if (state.trim.end > 0 && state.playing) {
         if (video.currentTime >= state.trim.end - 0.02) {
           video.currentTime = state.trim.start;
           lastTime = -1;
@@ -297,10 +330,9 @@ export function Stage(props: StageProps) {
         }
       }
       if (video.currentTime === lastTime || video.readyState < 2) return;
-      lastTime = video.currentTime;
       const painter = graderRef.current;
       if (!painter) return;
-      painter.renderNow({
+      const painted = painter.renderNow({
         source: video,
         grade: state.grade,
         width: size.width,
@@ -309,12 +341,64 @@ export function Stage(props: StageProps) {
         compareMode: state.showOriginal ? 'original' : 'none',
         inputGuard: state.inputGuard,
       }, state.grade);
+      // The LUT may still be uploading: keep the frame already on the plate and
+      // retry on the next tick rather than locking a blank frame in place.
+      if (!painted) return;
+      lastTime = video.currentTime;
       draw();
       onTime(video.currentTime);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [video, activeMedia, draw, onTime]);
+
+  /* ── the decoder's first frames: paint them the moment they exist ───────── */
+  useEffect(() => {
+    if (!video || !activeMedia || activeMedia.kind !== 'video') return;
+    let cancelled = false;
+
+    const onFrame = () => {
+      if (cancelled || video.readyState < 2) return;
+      const painter = graderRef.current;
+      if (!painter) return;
+      const paint = () => { if (!cancelled) paintSourceFrame(); };
+      // `loadeddata` can land before the LUT finished uploading. prepare() is
+      // idempotent, so wait for it and paint straight after rather than
+      // leaving the plate on the last frame it happened to have.
+      if (painter.isPrepared(live.current.grade)) paint();
+      else void painter.prepare(live.current.grade).then(paint).catch(() => undefined);
+    };
+    // The element reports its own length whenever it finally knows it (a clip
+    // opened on metadata alone knows it a beat later); the cut follows.
+    const onDurationChange = () => {
+      const seconds = video.duration;
+      if (Number.isFinite(seconds) && seconds > 0) onDuration(seconds);
+    };
+    // A clip that reaches its own end stops itself. The stage's loop is the
+    // transport, so it starts the next pass instead of freezing on frame 0.
+    const onEnded = () => {
+      const state = live.current;
+      if (!state.playing) return;
+      video.currentTime = state.trim.start;
+      void video.play().catch(() => undefined);
+    };
+
+    video.addEventListener('loadeddata', onFrame);
+    video.addEventListener('canplay', onFrame);
+    video.addEventListener('durationchange', onDurationChange);
+    video.addEventListener('ended', onEnded);
+    // The element outlives this effect (it is the shared bank clip), so it may
+    // already hold a frame and a length by the time the stage mounts.
+    onFrame();
+    onDurationChange();
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadeddata', onFrame);
+      video.removeEventListener('canplay', onFrame);
+      video.removeEventListener('durationchange', onDurationChange);
+      video.removeEventListener('ended', onEnded);
+    };
+  }, [video, activeMedia, paintSourceFrame, onDuration]);
 
   /* ── audio: the element follows the mute toggle ─────────────────────────── */
   useEffect(() => {
@@ -327,8 +411,14 @@ export function Stage(props: StageProps) {
   useEffect(() => {
     if (!video) return;
     if (playing) {
-      const start = video.currentTime < trim.start || video.currentTime >= trim.end ? trim.start : video.currentTime;
-      if (video.currentTime !== start) video.currentTime = start;
+      // An unknown end (trim.end === 0) must not read as "already past the
+      // out point", which would pin the playhead to 0s.
+      const end = trim.end > 0
+        ? trim.end
+        : (Number.isFinite(video.duration) ? video.duration : 0);
+      if (video.currentTime < trim.start || (end > 0 && video.currentTime >= end)) {
+        video.currentTime = trim.start;
+      }
       void video.play().catch(() => {
         /* Autoplay with sound can be refused before the visitor taps; the
            transport keeps the poster frame and the sound toggle stays visible. */

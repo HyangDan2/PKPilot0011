@@ -81,6 +81,7 @@ export type StudioAction =
   | { type: 'patch-sharpening'; patch: Partial<SharpeningSettings> }
   | { type: 'set-frame'; patch: Partial<FrameSettings> }
   | { type: 'set-trim'; trim: TrimRange }
+  | { type: 'set-duration'; duration: number }
   | { type: 'set-time'; time: number }
   | { type: 'set-playing'; playing: boolean }
   | { type: 'open-modal'; modal: ModalKind }
@@ -188,6 +189,27 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
       return { ...state, frame: { ...state.frame, ...action.patch }, revision: state.revision + 1 };
     case 'set-trim':
       return { ...state, trim: action.trim, revision: state.revision + 1 };
+    case 'set-duration': {
+      // A clip opened on metadata alone reports its length a beat later. The
+      // stage takes the number for the media and, while the trim bar has no
+      // end yet, for the cut as well — otherwise the play loop has nothing to
+      // loop against and the spec row prints no length.
+      const seconds = action.duration;
+      if (!Number.isFinite(seconds) || seconds <= 0) return state;
+      const active = state.media[state.activePhoto] ?? state.media[0] ?? null;
+      if (!active || active.kind !== 'video') return state;
+      const settled = Math.abs((active.duration || 0) - seconds) < 0.001;
+      const trimKnown = state.trim.end > 0;
+      if (settled && trimKnown) return state;
+      const media = state.media.map((item) =>
+        item === active ? { ...item, duration: seconds } : item);
+      return {
+        ...state,
+        media,
+        trim: trimKnown ? state.trim : { ...state.trim, end: seconds },
+        revision: state.revision + 1,
+      };
+    }
     case 'set-time':
       return { ...state, currentTime: action.time };
     case 'set-playing':

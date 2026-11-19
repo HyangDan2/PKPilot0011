@@ -229,6 +229,9 @@ img { display: block; max-width: 100%; }
 .topbar {
   display: flex; align-items: center; gap: 10px; padding: 0 clamp(10px, 2.4vw, 20px);
   height: 56px; border-bottom: 1px solid var(--line); background: var(--bg-soft); flex: 0 0 auto;
+  /* Its own stacking context, above the corner cluster: the ⋮ menu must open
+     over the floating tools, never behind them. */
+  position: relative; z-index: 50;
 }
 .brand-btn { display: flex; align-items: center; gap: 7px; background: none; border: 0; padding: 0; min-height: 44px; }
 .brand-btn .brand-word { font-size: 13.5px; }
@@ -658,8 +661,15 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   background: var(--surface-2); border: 1px solid var(--line-strong); box-shadow: var(--shadow); font-size: 12.5px;
 }
 .toast.error { border-color: rgba(255, 143, 128, 0.4); color: var(--error); }
+/* A notice shares the toast spot with an error; it sits above it. */
+.toast.is-notice { bottom: 72px; color: var(--ink-soft); }
 
-.source-video { position: fixed; left: -10px; bottom: -10px; width: 2px; height: 2px; opacity: 0.001; pointer-events: none; }
+.source-video {
+  /* Inside the viewport on purpose: Android Chrome hands frames only to a
+     video it can see, so parking the clip off-screen starves the plate. */
+  position: fixed; left: 0; top: 0; width: 4px; height: 4px;
+  opacity: 0.001; pointer-events: none; z-index: -1;
+}
 
 /* ── responsive ────────────────────────────────────────────────────────── */
 @media (min-width: 900px) {

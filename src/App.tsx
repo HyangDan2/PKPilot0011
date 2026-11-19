@@ -48,6 +48,7 @@ export default function App() {
   const [thumbsLoading, setThumbsLoading] = useState(false);
   const [metaOverride, setMetaOverride] = useState<Partial<PlateMeta>>({});
   const [muted, setMuted] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
   const bank = useRef<MediaBank>({ photos: new Map(), video: null });
   const fileRef = useRef<File | null>(null);
   const cancelRef = useRef<Cancellation | null>(null);
@@ -112,6 +113,13 @@ export default function App() {
     root.style.setProperty('--theme-rev', String(Date.now()));
   }, [state.theme]);
 
+  /* A sound fallback is information, not an error: it clears itself. */
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(null), 4500);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+
   /* ── media loading ──────────────────────────────────────────────────────── */
   const clearMedia = useCallback(() => {
     state.media.forEach(releaseMedia);
@@ -165,11 +173,10 @@ export default function App() {
     setBusy('영상을 분석하는 중…');
     setError(null);
     try {
+      // loadVideo already parked its element in the page (the decoder needs it
+      // there); clearing here only drops the previous clip.
       const loaded = await loadVideo(file);
       clearMedia();
-      loaded.video.className = 'source-video';
-      loaded.video.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(loaded.video);
       bank.current.video = loaded.video;
       fileRef.current = file;
       dispatch({ type: 'open-video', media: loaded.info });
@@ -411,14 +418,24 @@ export default function App() {
   const togglePlay = useCallback(() => {
     const video = bank.current.video;
     const next = !state.playing;
-    if (video && next && muted) {
-      setMuted(false);
-      void video.play().catch(() => {
-        // Chrome refuses a sound-on play without a gesture: fall back to silent
-        // playback and leave the sound toggle in the visitor's hands.
-        setMuted(true);
-        setError('브라우저가 소리 있는 재생을 막았습니다 — [소리 켜기]를 한 번 눌러 주세요.');
-      });
+    if (video && next) {
+      if (!muted) {
+        void video.play().catch(() => undefined);
+      } else {
+        // Unmute the element before asking it to play: a setMuted() state
+        // update only lands on the next render, which is too late for a call
+        // the browser counts against the visitor's tap.
+        video.muted = false;
+        setMuted(false);
+        void video.play().catch(() => {
+          // The browser refused sound. Go silent instead of leaving the clip
+          // frozen, and say so once.
+          video.muted = true;
+          setMuted(true);
+          setNotice('브라우저가 소리 있는 재생을 막아 음소거로 재생합니다.');
+          void video.play().catch(() => undefined);
+        });
+      }
     }
     dispatch({ type: 'set-playing', playing: next });
   }, [state.playing, muted]);
@@ -427,12 +444,13 @@ export default function App() {
     const video = bank.current.video;
     if (!video) return;
     if (muted) {
-      setMuted(false);
       video.muted = false;
+      setMuted(false);
       void video.play().catch(() => {
-        setMuted(true);
         video.muted = true;
-        setError('브라우저가 소리 있는 재생을 막았습니다 — 화면을 한 번 누른 뒤 다시 시도해 주세요.');
+        setMuted(true);
+        setNotice('브라우저가 소리 있는 재생을 막아 음소거로 재생합니다.');
+        void video.play().catch(() => undefined);
       });
       if (!state.playing) dispatch({ type: 'set-playing', playing: true });
     } else {
@@ -465,6 +483,10 @@ export default function App() {
   }, []);
 
   const onTime = useCallback((seconds: number) => dispatch({ type: 'set-time', time: seconds }), []);
+
+  /** The element learns a clip's real length from `durationchange`; the trim
+   *  bar and the spec row take it from there. */
+  const onDuration = useCallback((seconds: number) => dispatch({ type: 'set-duration', duration: seconds }), []);
 
   const editorSessionLabel = activeMedia
     ? `${activeMedia.name} · ${activeMedia.width}×${activeMedia.height}`
@@ -711,6 +733,7 @@ export default function App() {
             muted={muted}
             onToggleMute={toggleMute}
             onTime={onTime}
+            onDuration={onDuration}
             onTogglePlay={togglePlay}
           />
           {showOriginal && <span className="compare-badge">원본</span>}
@@ -881,6 +904,12 @@ export default function App() {
       {replaceInput}
 
       {thumbsLoading && <span className="sr-only" role="status">썸네일을 그리는 중</span>}
+      {notice && (
+        <div className="toast is-notice" role="status">
+          {notice}
+          <button type="button" className="icon-btn tiny" onClick={() => setNotice(null)} aria-label="닫기">✕</button>
+        </div>
+      )}
       {error && (
         <div className="toast error" role="alert">
           {error}

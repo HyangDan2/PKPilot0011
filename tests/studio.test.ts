@@ -26,6 +26,35 @@ describe('studio reducer', () => {
     expect(state.playing).toBe(true);
   });
 
+  it('takes a length that arrives after the clip opened', () => {
+    const unknown: MediaInfo = { ...video, duration: 0 };
+    let state = studioReducer(initialStudio(), { type: 'open-video', media: unknown });
+    // No length yet: the cut is open, not zero-length.
+    expect(state.trim).toEqual({ start: 0, end: 0 });
+
+    state = studioReducer(state, { type: 'set-duration', duration: 12.4 });
+    expect(state.media[0].duration).toBe(12.4);
+    expect(state.trim).toEqual({ start: 0, end: 12.4 });
+
+    // `durationchange` repeats; a length already known is not a change.
+    expect(studioReducer(state, { type: 'set-duration', duration: 12.4 })).toBe(state);
+    expect(studioReducer(state, { type: 'set-duration', duration: Number.NaN })).toBe(state);
+    expect(studioReducer(state, { type: 'set-duration', duration: 0 })).toBe(state);
+  });
+
+  it('leaves a hand-drawn cut alone when the length arrives', () => {
+    let state = studioReducer(initialStudio(), { type: 'open-video', media: video });
+    state = studioReducer(state, { type: 'set-trim', trim: { start: 1, end: 4 } });
+    state = studioReducer(state, { type: 'set-duration', duration: 6.4 });
+    expect(state.trim).toEqual({ start: 1, end: 4 });
+    expect(state.media[0].duration).toBe(6.4);
+  });
+
+  it('ignores a length for a photo', () => {
+    const state = studioReducer(initialStudio(), { type: 'open-photos', media: [photo] });
+    expect(studioReducer(state, { type: 'set-duration', duration: 3 })).toBe(state);
+  });
+
   it('drops a four-cut frame when a video takes over the stage', () => {
     let state = studioReducer(initialStudio(), { type: 'open-photos', media: [photo] });
     state = studioReducer(state, { type: 'set-frame', patch: { style: 'contact' } });
