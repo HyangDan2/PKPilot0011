@@ -66,7 +66,7 @@ export function Landing(props: LandingProps) {
           </p>
           <div className="hero-stats">
             <span><b>13</b> 프레임</span>
-            <span><b>68</b> 필터</span>
+            <span><b>69</b> 필터</span>
             <span><b>4K</b> 입력</span>
             <span><b>0 B</b> 업로드</span>
           </div>
