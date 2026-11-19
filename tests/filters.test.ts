@@ -6,6 +6,7 @@ import {
   MARGARINE_FILTERS,
   MARGARINE_GROUPS,
   NEUTRAL_FILTER,
+  RETRO90_FILTER,
   RETRO_OPTICS,
   gradeForFilter,
   margarinePreset,
@@ -15,14 +16,25 @@ import { FILM_PROFILES } from '../src/films/registry';
 import { defaultCurves } from '../src/types/curves';
 
 describe('filter catalogue', () => {
-  it('offers nine film stocks, RETRO 90 and 58 Margarine looks', () => {
-    expect(FILM_FILTERS.filter((filter) => filter.filmId !== 'FS-010')).toHaveLength(9);
-    expect(FILM_FILTERS.some((filter) => filter.key === 'FS-010')).toBe(true);
+  it('offers nine film stocks, the 58 Margarine looks and RETRO 90 on its own', () => {
+    expect(FILM_FILTERS).toHaveLength(9);
+    expect(FILM_FILTERS.some((filter) => filter.key === 'FS-010')).toBe(false);
+    expect(RETRO90_FILTER.key).toBe('FS-010');
+    expect(RETRO90_FILTER.name).toBe('RETRO 90');
+    expect(RETRO90_FILTER.group).toBe('Filter Set');
     expect(MARGARINE_FILTERS).toHaveLength(58);
-    expect(ALL_FILTERS).toHaveLength(1 + 10 + 58);
+    expect(ALL_FILTERS).toHaveLength(1 + 9 + 58 + 1);
     expect(MARGARINE_GROUPS).toHaveLength(6);
     expect(new Set(MARGARINE_GROUPS)).toEqual(new Set(['Light', 'Cafe', 'Portrait', 'Nature', 'Color', 'Vintage']));
     expect(NEUTRAL_FILTER.filmId).toBe('identity');
+  });
+
+  it('puts RETRO 90 after the whole Margarine catalogue', () => {
+    const keys = ALL_FILTERS.map((filter) => filter.key);
+    expect(keys[0]).toBe('neutral');
+    expect(keys.slice(1, 10)).toEqual(['FS-001', 'FS-002', 'FS-003', 'FS-004', 'FS-005', 'FS-006', 'FS-007', 'FS-008', 'FS-009']);
+    expect(keys.slice(10, keys.length - 1)).toEqual(MARGARINE_FILTERS.map((filter) => filter.key));
+    expect(keys[keys.length - 1]).toBe('FS-010');
   });
 
   it('every filter maps to a real LUT-bearing profile', () => {

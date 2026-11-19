@@ -740,8 +740,9 @@ export default function App() {
           {floatingCluster(true)}
         </div>
 
-        {mediaKind === 'video' ? (
-          <section className="transport" aria-label="재생과 트림">            <button
+        {mediaKind === 'video' && (
+          <section className="transport" aria-label="재생과 트림">
+            <button
               type="button"
               className="play-btn"
               aria-label={state.playing ? '일시정지' : '재생'}
@@ -759,37 +760,7 @@ export default function App() {
               onSeek={seek}
             />
           </section>
-        ) : state.media.length > 1 ? (
-          <section className="slot-strip" aria-label="플레이트 사진">
-            {state.media.slice(0, 4).map((item, index) => (
-              <button
-                key={item.url}
-                type="button"
-                className={`slot${state.activePhoto === index ? ' on' : ''}`}
-                onClick={() => dispatch({ type: 'set-active-photo', index })}
-              >
-                <img src={item.url} alt={`슬롯 ${index + 1}`} />
-                <span>SLOT {index + 1}</span>
-              </button>
-            ))}
-            {state.media.length < 4 && (
-              <label className="slot add">
-                <span>+ 사진</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  hidden
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    if (files.length) void addPhotos(files);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
-            )}
-          </section>
-        ) : null}
+        )}
 
         <FilterStrip
           selection={state.filter}

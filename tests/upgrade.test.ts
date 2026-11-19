@@ -13,7 +13,7 @@ import {
 } from '../src/export/codecs';
 import { routeFiles } from '../src/media/route';
 import { specFields, withSpecFallback } from '../src/media/spec';
-import { stageTypeBoost, virtualPhotoBox } from '../src/studio/render';
+import { virtualPhotoBox } from '../src/studio/render';
 import { initialStudio, studioReducer } from '../src/state/studio';
 import type { MediaInfo } from '../src/types/studio';
 
@@ -171,27 +171,15 @@ describe('a plate never prints an empty row', () => {
   });
 });
 
-/* ------------------------------------------------------- stage legibility */
+/* ------------------------------------------------------- stage geometry */
 
-describe('the stage designs at print size, then compensates', () => {
+describe('the stage designs at Shutterplate’s print size and only scales it', () => {
   it('keeps the plate at a real print size however small the phone is', () => {
     const small = virtualPhotoBox({ width: 900, height: 600 }, 1200, 1200);
     expect(Math.max(small.width, small.height)).toBe(1200);
     expect(small.width / small.height).toBeCloseTo(1.5, 2);
     const big = virtualPhotoBox({ width: 4000, height: 3000 }, 1200, 1200);
     expect(Math.max(big.width, big.height)).toBe(1200);
-  });
-
-  it('asks for little or no boost on a desktop and a real one on a phone', () => {
-    const desktop = stageTypeBoost({ u: 1.3, band: 158, cssScale: 0.7 });
-    expect(desktop).toBeLessThan(1.3);
-    const phone = stageTypeBoost({ u: 1.3, band: 158, cssScale: 0.28 });
-    expect(phone).toBeGreaterThan(1.8);
-    expect(phone).toBeLessThanOrEqual(2.6);
-  });
-
-  it('never exceeds its own ceiling, however tiny the screen', () => {
-    expect(stageTypeBoost({ u: 1.3, band: 158, cssScale: 0.05 })).toBeLessThanOrEqual(2.6);
   });
 });
 
@@ -212,30 +200,27 @@ beforeAll(() => {
   plate = load(window) as PlateLike;
 });
 
-describe('the plate engine’s type boost', () => {
-  it('leaves the designed plate untouched when nobody asks for a boost', () => {
-    const layout = plate.layout({ w: 1200, h: 800 }, { style: 'gallery' });
+describe('the plate keeps Shutterplate’s designed proportions', () => {
+  it('prints Classic Gallery at its own geo, with no type boost', () => {
+    const layout = plate.layout({ w: 1200, h: 750 }, { style: 'gallery' });
     expect(layout.typeBoost).toBe(1);
-    expect(layout.W).toBe(1200 + 2 * Math.round(1200 * 0.045));
+    // geo: pad 4.5% of the photo width on every side, band 13% of its height
+    const padX = Math.round(1200 * 0.045);
+    expect(layout.padX).toBe(padX);
+    expect(layout.W).toBe(1200 + 2 * padX);
+    expect(layout.padTop).toBe(padX);
+    expect(layout.band).toBe(Math.round(padX + 750 * 0.13));
+    expect(layout.H).toBe((layout.padTop as number) + 750 + (layout.band as number));
     expect(layout.u as number).toBeCloseTo((layout.W as number) / 1000, 5);
+    // the band stays a fraction of the plate, not a phone-sized balloon
+    expect((layout.band as number) / (layout.H as number)).toBeCloseTo(0.159, 2);
   });
 
-  it('grows the copy band and the type unit without moving the photograph', () => {
-    const plain = plate.layout({ w: 1200, h: 800 }, { style: 'gallery' });
-    const boosted = plate.layout({ w: 1200, h: 800 }, { style: 'gallery', typeBoost: 2 });
-    expect(boosted.W).toBe(plain.W);
-    expect(boosted.PW).toBe(plain.PW);
-    expect(boosted.padTop).toBe(plain.padTop);
-    expect(boosted.band as number).toBeGreaterThan((plain.band as number) * 1.9);
-    expect(boosted.u as number).toBeCloseTo((plain.u as number) * 2, 4);
-    expect(boosted.uBase as number).toBeCloseTo(plain.u as number, 4);
-    // the copy band holds the growth, so the plate simply gets taller
-    expect(boosted.H as number).toBeGreaterThan(plain.H as number);
-  });
-
-  it('clamps an absurd request instead of distorting the plate', () => {
-    const boosted = plate.layout({ w: 1200, h: 800 }, { style: 'horizon', typeBoost: 40 });
-    expect(boosted.typeBoost).toBeLessThanOrEqual(2.8);
+  it('reaches the same geometry for the same photograph at any display size', () => {
+    // The stage scales the canvas, it never re-lays the plate out per viewport.
+    const layout = plate.layout({ w: 1200, h: 750 }, { style: 'gallery' });
+    expect(layout.uBase as number).toBeCloseTo((layout.W as number) / 1000, 5);
+    expect(layout.band as number).toBe(Math.round((layout.padX as number) + 750 * 0.13));
   });
 
   it('ships the four themes the 4-cut window opens with', () => {

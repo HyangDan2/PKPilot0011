@@ -23,17 +23,20 @@ export const NEUTRAL_FILTER: FilterOption = {
   name: 'Neutral', detail: '보정 없이 원본 그대로', group: 'Base',
 };
 
-/** 9 film stocks + RETRO 90, the "HD2Lab" shelf of the filter modal. */
-export const FILM_FILTERS: FilterOption[] = [
-  ...FILM_LIST.map((film) => ({
-    key: film.id, kind: 'film' as const, filmId: film.id, presetId: null,
-    name: film.name, detail: film.style, group: 'HD2Lab Film',
-  })),
-  {
-    key: 'FS-010', kind: 'film' as const, filmId: 'FS-010', presetId: null,
-    name: 'RETRO 90', detail: 'Night Amber · Halation', group: 'HD2Lab Film',
-  },
-];
+/** The nine HD2Lab film stocks (FS-001 ~ FS-009) — the shelf the strip opens with. */
+export const FILM_FILTERS: FilterOption[] = FILM_LIST.map((film) => ({
+  key: film.id, kind: 'film' as const, filmId: film.id, presetId: null,
+  name: film.name, detail: film.style, group: 'HD2Lab Film',
+}));
+
+/**
+ * RETRO 90 (FS-010) is its own set, set apart from the film shelf: it sits
+ * after the whole Margarine catalogue in the strip and in the modal.
+ */
+export const RETRO90_FILTER: FilterOption = {
+  key: 'FS-010', kind: 'film', filmId: 'FS-010', presetId: null,
+  name: 'RETRO 90', detail: 'Night Amber · Halation', group: 'Filter Set',
+};
 
 export const MARGARINE_GROUPS: string[] = Array.from(new Set(MARGARINE_PRESETS.map((preset) => preset.category)));
 
@@ -42,7 +45,10 @@ export const MARGARINE_FILTERS: FilterOption[] = MARGARINE_PRESETS.map((preset) 
   name: preset.name, detail: `${preset.baseFilmId} · ${preset.category}`, group: preset.category,
 }));
 
-export const ALL_FILTERS: FilterOption[] = [NEUTRAL_FILTER, ...FILM_FILTERS, ...MARGARINE_FILTERS];
+/** Shelf order: Neutral, the nine stocks, the 58 Margarine looks, then RETRO 90. */
+export const ALL_FILTERS: FilterOption[] = [
+  NEUTRAL_FILTER, ...FILM_FILTERS, ...MARGARINE_FILTERS, RETRO90_FILTER,
+];
 
 export const DEFAULT_FILTER: FilterSelection = { kind: 'film', filmId: 'FS-004', presetId: null };
 

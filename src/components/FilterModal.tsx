@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { Slider } from './controls';
-import { FILM_FILTERS, MARGARINE_GROUPS, MARGARINE_FILTERS, NEUTRAL_FILTER, type FilterOption } from '../filters/catalog';
+import { ALL_FILTERS, FILM_FILTERS, MARGARINE_GROUPS, MARGARINE_FILTERS, NEUTRAL_FILTER, RETRO90_FILTER, type FilterOption } from '../filters/catalog';
 import type { FilterSelection } from '../types/studio';
 import { IconCheck } from './Icons';
 
@@ -14,6 +14,7 @@ interface FilterModalProps {
   onClose: () => void;
 }
 
+/** HD2Lab Film (Neutral + nine stocks), then the Margarine groups, then RETRO 90. */
 const SECTIONS: { id: string; label: string; filters: FilterOption[] }[] = [
   { id: 'hd2lab', label: 'HD2Lab Film', filters: [NEUTRAL_FILTER, ...FILM_FILTERS] },
   ...MARGARINE_GROUPS.map((group) => ({
@@ -21,6 +22,7 @@ const SECTIONS: { id: string; label: string; filters: FilterOption[] }[] = [
     label: `Margarine · ${group}`,
     filters: MARGARINE_FILTERS.filter((filter) => filter.group === group),
   })),
+  { id: 'filterset', label: 'Filter Set · RETRO 90', filters: [RETRO90_FILTER] },
 ];
 
 export function FilterModal({ selection, strength, thumbs, onSelect, onStrength, onClose }: FilterModalProps) {
@@ -58,7 +60,7 @@ export function FilterModal({ selection, strength, thumbs, onSelect, onStrength,
     >
       <div className="chip-row sticky">
         <button type="button" className={`chip${tab === 'all' ? ' on' : ''}`} onClick={() => setTab('all')}>
-          전체 <span>{FILM_FILTERS.length + MARGARINE_FILTERS.length + 1}</span>
+          전체 <span>{ALL_FILTERS.length}</span>
         </button>
         {SECTIONS.map((section) => (
           <button

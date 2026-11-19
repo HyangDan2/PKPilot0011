@@ -217,7 +217,8 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
     .toHaveCount(Math.min(4, before + 2));
   await page.getByRole('button', { name: /이 프레임으로 적용/ }).click();
   await expect(page.locator('[data-testid="fourcut-modal"]')).toHaveCount(0);
-  await expect(page.locator('.slot-strip .slot:not(.add)')).toHaveCount(Math.min(4, before + 2));
+  // The photo bar is gone from the workbench: the slots live in the window.
+  await expect(page.locator('.slot-strip')).toHaveCount(0);
   await page.waitForTimeout(900);
 
   // ── the three effect sheets, split out of the grade panel ──
@@ -364,15 +365,16 @@ test('mobile 390×844: the strip, the cluster and readable plate copy', async ({
   expect(canvas!.width).toBeLessThanOrEqual(390);
   expect(canvas!.height).toBeLessThanOrEqual(844);
 
-  // The plate is designed at print size and its copy is boosted for the phone.
+  // The plate is Shutterplate's own design: no type boost, the frame's ratio.
   const boost = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-type-boost'));
   const scale = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-plate-scale'));
-  const minType = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-min-type-css'));
-  process.stdout.write(`[mobile] boost=${boost} scale=${scale} smallest row=${minType}px\n`);
-  expect(boost).toBeGreaterThan(1.5);
+  const band = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-band'));
+  const plateSize = (await page.locator('[data-testid="plate-canvas"]').getAttribute('data-plate-size'))!.split('x').map(Number);
+  process.stdout.write(`[mobile] boost=${boost} scale=${scale} band=${band} plate=${plateSize.join('x')}\n`);
+  expect(boost).toBe(1);
   expect(scale).toBeLessThan(0.45);
-  // Every row of frame copy has to read at arm's length on a phone.
-  expect(minType).toBeGreaterThanOrEqual(8.5);
+  // the band stays the frame's own fraction of the plate, not a phone-sized balloon
+  expect(band / plateSize[1]).toBeCloseTo(0.156, 3);
 
   // The corner cluster is one row inside the stage and touches nothing.
   const cluster = await page.locator('[data-testid="float-cluster"]').boundingBox();

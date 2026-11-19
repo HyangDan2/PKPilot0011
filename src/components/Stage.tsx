@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
-import { buildPlateLayout, stageTypeBoost, virtualPhotoBox } from '../studio/render';
+import { buildPlateLayout, virtualPhotoBox } from '../studio/render';
 import { PhotoGrader } from '../studio/grading';
 import { IconVolume, IconVolumeOff } from './Icons';
 import type { FrameSettings, GradeSettings, MediaInfo, PlateMeta, TrimRange } from '../types/studio';
@@ -47,9 +47,10 @@ const MAX_DPR = 2;
  * the preview is exactly the exported frame — filter, margins, emblem and all.
  *
  * The plate is designed at a virtual print size (long edge >= 1200px) and then
- * scaled to whatever room the stage has. On a phone that scale is a third, so
- * the plate is asked for a type boost in the same breath: the copy grows with
- * the band while the photograph keeps its place.
+ * scaled to whatever room the stage has. The frame's own proportions are
+ * Shutterplate's: the stage only ever scales the finished plate, it never asks
+ * for a bigger band or a bigger type unit, so the preview and the 1:1 export
+ * are the same plate at two sizes.
  */
 export function Stage(props: StageProps) {
   const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, muted, onToggleMute, onTime, onDuration, onTogglePlay } = props;
@@ -67,6 +68,9 @@ export function Stage(props: StageProps) {
   const [contextEpoch, setContextEpoch] = useState(0);
   const [ratio, setRatio] = useState(1.5);
   const cssScale = useRef(1);
+  /** The room the plate was fitted into, and the viewport margin around it. */
+  const roomRef = useRef({ width: 0, height: 0 });
+  const roomPadRef = useRef(0);
   /** True once the GPU proved it cannot paint: the plate then shows the source pixels. */
   const rawFallback = useRef(false);
 
@@ -139,8 +143,16 @@ export function Stage(props: StageProps) {
     canvas.dataset.plateSize = `${layout.W}x${layout.H}`;
     canvas.dataset.typeBoost = String(layout.typeBoost ?? 1);
     canvas.dataset.plateScale = cssScale.current.toFixed(3);
+    // The frame's own geometry, so a test can check the Shutterplate ratio the
+    // visitor actually got: W = PW + 2 padX, band = padX + PH · extra%, no boost.
+    canvas.dataset.photoBox = `${layout.PW}x${layout.PH}`;
+    canvas.dataset.padX = String(layout.padX);
+    canvas.dataset.padTop = String(layout.padTop);
+    canvas.dataset.band = String(layout.band);
+    canvas.dataset.room = `${Math.round(roomRef.current.width)}x${Math.round(roomRef.current.height)}`;
+    canvas.dataset.roomPad = String(roomPadRef.current);
     // The smallest row the frame prints, as the visitor actually sees it.
-    const smallestRow = Math.min((layout.uBase ?? layout.u) * (layout.typeBoost ?? 1) * 11, layout.band * 0.078);
+    const smallestRow = Math.min(layout.u * 11, layout.band * 0.078);
     canvas.dataset.minTypeCss = (smallestRow * cssScale.current).toFixed(2);
     plate.paint(ctx, layout);
   }, [plate, bank, video]);
@@ -177,7 +189,15 @@ export function Stage(props: StageProps) {
     if (!stageSize.width || !stageSize.height || !activeMedia) return;
     let cancelled = false;
     const painter = graderRef.current;
-    const room = { width: Math.max(60, stageSize.width - 8), height: Math.max(60, stageSize.height - 8) };
+    // Shutterplate's own viewport margin: a phone keeps 16px of air around the
+    // print, a wider window 40px, so the plate never touches the stage edge.
+    const pad = stageSize.width < 520 ? 16 : 40;
+    const room = {
+      width: Math.max(60, stageSize.width - pad),
+      height: Math.max(60, stageSize.height - pad),
+    };
+    roomRef.current = room;
+    roomPadRef.current = pad;
 
     const build = async () => {
       // Multi-cut plates grade each photograph separately and keep the pixels.
@@ -227,22 +247,9 @@ export function Stage(props: StageProps) {
 
       // One virtual print size for every stage: no more phone-sized plate.
       const base = virtualPhotoBox(activeMedia, PLATE_BASE_EDGE, PLATE_BASE_EDGE);
-      let photo = { width: base.width, height: base.height };
-      let layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null });
-      let scale = Math.min(1, room.width / layout.W, room.height / layout.H);
-
-      // Ask the plate for whatever type boost the display scale needs, then let
-      // the taller plate settle into the stage and repeat once so the boost is
-      // measured against the scale the visitor actually gets.
-      for (let pass = 0; pass < 2; pass += 1) {
-        const boost = stageTypeBoost({ u: layout.W / 1000, band: layout.band, cssScale: scale });
-        if (boost <= 1.001) break;
-        const next = buildPlateLayout({
-          plate, emblems, frame, meta, photo, image: painter?.canvas ?? null, typeBoost: boost,
-        });
-        layout = next;
-        scale = Math.min(1, room.width / layout.W, room.height / layout.H);
-      }
+      const photo = { width: base.width, height: base.height };
+      const layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null });
+      const scale = Math.min(1, room.width / layout.W, room.height / layout.H);
 
       if (cancelled) return;
       layoutRef.current = layout;
