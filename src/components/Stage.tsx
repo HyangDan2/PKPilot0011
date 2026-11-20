@@ -60,6 +60,8 @@ export function Stage(props: StageProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const graderRef = useRef<PhotoGrader | null>(null);
   const layoutRef = useRef<PlateLayout | null>(null);
+  /** With the frame off there is no plate: the source fills this box instead. */
+  const plainRef = useRef<{ W: number; H: number } | null>(null);
   const slotCanvases = useRef<HTMLCanvasElement[]>([]);
   const canvasKey = useRef('');
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
@@ -117,29 +119,63 @@ export function Stage(props: StageProps) {
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
-    const layout = layoutRef.current;
     const painter = graderRef.current;
-    if (!canvas || !layout) return;
+    if (!canvas) return;
+    const state = live.current;
+    const framed = state.frame.enabled !== false;
+    const layout = layoutRef.current;
+    const plain = plainRef.current;
+    const box = framed ? layout : plain;
+    if (!box) return;
     const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
     const scale = cssScale.current * dpr;
-    const key = `${layout.W}x${layout.H}@${scale.toFixed(3)}`;
+    const key = `${box.W}x${box.H}@${scale.toFixed(3)}`;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     if (canvasKey.current !== key) {
-      canvas.width = Math.max(1, Math.round(layout.W * scale));
-      canvas.height = Math.max(1, Math.round(layout.H * scale));
-      canvas.style.width = `${Math.round(layout.W * cssScale.current)}px`;
-      canvas.style.height = `${Math.round(layout.H * cssScale.current)}px`;
+      canvas.width = Math.max(1, Math.round(box.W * scale));
+      canvas.height = Math.max(1, Math.round(box.H * scale));
+      canvas.style.width = `${Math.round(box.W * cssScale.current)}px`;
+      canvas.style.height = `${Math.round(box.H * cssScale.current)}px`;
       canvasKey.current = key;
     }
-    if (painter && (!painter.available || rawFallback.current) && live.current.activeMedia) {
-      const fallback = live.current.activeMedia.kind === 'photo'
-        ? bank.photos.get(live.current.activeMedia.url) ?? null
-        : video;
-      layout.img = fallback as CanvasImageSource | null;
-    }
+    canvas.dataset.frameEnabled = String(framed);
+
+    const source = state.activeMedia
+      ? state.activeMedia.kind === 'photo'
+        ? bank.photos.get(state.activeMedia.url) ?? null
+        : video
+      : null;
+    const graded = painter && painter.available && !rawFallback.current && painter.canvas.width > 1
+      ? painter.canvas
+      : null;
+
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.clearRect(0, 0, layout.W, layout.H);
+    ctx.clearRect(0, 0, box.W, box.H);
+
+    if (!framed) {
+      // No margin, band or emblem: the graded picture itself, filling the box.
+      const picture = graded ?? (source as CanvasImageSource | null);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      if (picture) ctx.drawImage(picture, 0, 0, box.W, box.H);
+      canvas.dataset.plateSize = `${box.W}x${box.H}`;
+      canvas.dataset.photoBox = `${box.W}x${box.H}`;
+      canvas.dataset.padX = '0';
+      canvas.dataset.padTop = '0';
+      canvas.dataset.band = '0';
+      canvas.dataset.typeBoost = '1';
+      canvas.dataset.plateScale = cssScale.current.toFixed(3);
+      canvas.dataset.room = `${Math.round(roomRef.current.width)}x${Math.round(roomRef.current.height)}`;
+      canvas.dataset.roomPad = String(roomPadRef.current);
+      canvas.dataset.minTypeCss = '0';
+      return;
+    }
+
+    if (!layout) return;
+    if (painter && (!painter.available || rawFallback.current) && state.activeMedia) {
+      layout.img = source as CanvasImageSource | null;
+    }
     // A small window onto what the stage decided, so a test can tell a
     // designed-at-print-size plate from a phone-sized one.
     canvas.dataset.plateSize = `${layout.W}x${layout.H}`;
@@ -202,6 +238,27 @@ export function Stage(props: StageProps) {
     roomPadRef.current = pad;
 
     const build = async () => {
+      // With the frame off nothing is designed: the picture itself is contained
+      // in the room, at its own ratio, and the stage centres it.
+      if (frame.enabled === false) {
+        const contain = Math.min(
+          room.width / Math.max(1, activeMedia.width),
+          room.height / Math.max(1, activeMedia.height),
+        );
+        const W = Math.max(2, Math.round(activeMedia.width * contain));
+        const H = Math.max(2, Math.round(activeMedia.height * contain));
+        if (cancelled) return;
+        plainRef.current = { W, H };
+        layoutRef.current = null;
+        cssScale.current = 1;
+        canvasKey.current = '';
+        setGlUnavailable(!(painter?.available ?? false));
+        setRatio(W / H);
+        draw();
+        setReady(true);
+        return;
+      }
+
       // Multi-cut plates grade each photograph separately and keep the pixels.
       if (isMulti) {
         const slots: { img: HTMLCanvasElement | null; w: number; h: number }[] = [];

@@ -129,14 +129,21 @@ test('desktop editor: title-backdrop slide, strip, cluster, and no corner collis
   await expect(page.locator('.topbar .chip').first()).toContainText('RETRO 90');
   expect(await page.locator('[data-testid="filter-modal"]').count()).toBe(0);
 
-  // All four tools sit in the corner cluster, in the editor only.
-  await expect(page.locator('[data-testid="float-cluster"] .tool-fab')).toHaveCount(4);
+  // Only the theme toggle floats over the stage now; the four tools live in
+  // the utility bar under it, next to the file's own name and resolution.
+  await expect(page.locator('[data-testid="float-cluster"] .tool-fab')).toHaveCount(0);
+  await expect(page.locator('[data-testid="theme-fab"]')).toBeVisible();
+  await expect(page.locator('[data-testid="utility-bar"]')).toBeVisible();
   await expect(page.locator('[data-testid="fourcut-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="colorlab-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="tonecurve-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="cameraeffects-fab"]')).toBeVisible();
+  await expect(page.locator('[data-testid="utility-bar"] .utility-meta')).toContainText('sample-01.jpg');
+  // the topbar no longer repeats the file name and resolution
+  await expect(page.locator('.topbar-meta')).toHaveCount(0);
   await expectNoOverlap(page, '[data-testid="float-cluster"]', '.dock');
   await expectNoOverlap(page, '[data-testid="float-cluster"]', '[data-testid="filter-strip"]');
+  await expectNoOverlap(page, '[data-testid="utility-bar"]', '[data-testid="filter-strip"]');
   await expectNoOverlap(page, '[data-testid="filter-strip"]', '.dock');
 
   // The trash is gone; replace + menu took its place.
@@ -386,16 +393,18 @@ test('mobile 390×844: the strip, the cluster and readable plate copy', async ({
   const stageBox = await page.locator('.stage').boundingBox();
   expect(Math.abs((canvas!.x + canvas!.width / 2) - (stageBox!.x + stageBox!.width / 2))).toBeLessThanOrEqual(1);
 
-  // The corner cluster is one row inside the stage and touches nothing.
+  // The corner cluster holds the theme toggle alone inside the stage.
   const cluster = await page.locator('[data-testid="float-cluster"]').boundingBox();
   expect(cluster!.x).toBeGreaterThanOrEqual(0);
   expect(cluster!.x + cluster!.width).toBeLessThanOrEqual(390);
   expect(cluster!.width).toBeLessThan(320);
   await expectNoOverlap(page, '[data-testid="float-cluster"]', '.dock');
   await expectNoOverlap(page, '[data-testid="float-cluster"]', '[data-testid="filter-strip"]');
+  await expectNoOverlap(page, '[data-testid="utility-bar"]', '[data-testid="filter-strip"]');
   await expectNoOverlap(page, '[data-testid="filter-strip"]', '.dock');
-  await expect(page.locator('[data-testid="float-cluster"] .tool-fab')).toHaveCount(4);
+  await expect(page.locator('[data-testid="float-cluster"] .tool-fab')).toHaveCount(0);
   await expect(page.locator('[data-testid="theme-fab"]')).toBeVisible();
+  await expect(page.locator('[data-testid="utility-bar"] [data-testid="fourcut-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="backdrop-switch"]')).toBeVisible();
 
   await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_v3_mobile.png') });

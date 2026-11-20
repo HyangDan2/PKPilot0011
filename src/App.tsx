@@ -14,7 +14,7 @@ import { ToneCurveModal, curvesTouched } from './components/ToneCurveModal';
 import { CameraEffectsModal } from './components/CameraEffectsModal';
 import { BackdropSwitch, ThemeFab } from './components/ThemeControls';
 import {
-  IconCamera, IconDownload, IconFilm, IconFrame, IconPalette, IconPause, IconPlay, IconSliders, IconSpline, IconSwap,
+  IconCamera, IconDownload, IconFilm, IconFrame, IconPalette, IconPause, IconPlay, IconPlayback, IconSliders, IconSpline, IconSwap,
 } from './components/Icons';
 import { initialStudio, studioReducer } from './state/studio';
 import { loadPlateEngine, type SPEmblemsApi, type SPPlateApi } from './plate/engine';
@@ -48,6 +48,7 @@ export default function App() {
   const [thumbsLoading, setThumbsLoading] = useState(false);
   const [metaOverride, setMetaOverride] = useState<Partial<PlateMeta>>({});
   const [muted, setMuted] = useState(true);
+  const [playbackOpen, setPlaybackOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const bank = useRef<MediaBank>({ photos: new Map(), video: null });
   const fileRef = useRef<File | null>(null);
@@ -57,6 +58,10 @@ export default function App() {
   const activeMedia = state.media[state.activePhoto] ?? state.media[0] ?? null;
   const mediaKind = activeMedia?.kind ?? 'photo';
   const photos = useMemo(() => state.media.filter((item) => item.kind === 'photo'), [state.media]);
+
+  /* The playback sheet belongs to the clip that opened it: any new media
+     (or a swap) starts from the plain bar again. */
+  useEffect(() => { setPlaybackOpen(false); }, [activeMedia?.url]);
 
   const filterLabel = useMemo(() => {
     const found = ALL_FILTERS.find((filter) =>
@@ -382,8 +387,10 @@ export default function App() {
   const applyFourCut = useCallback(() => {
     if (!photos.length) return;
     dispatch({ type: 'open-modal', modal: null });
+    // A 4-cut plate is a frame: applying it shows what was chosen.
+    if (!state.frame.enabled) dispatch({ type: 'set-frame', patch: { enabled: true } });
     setView('editor');
-  }, [photos.length]);
+  }, [photos.length, state.frame.enabled]);
 
   /* ── exports ────────────────────────────────────────────────────────────── */
   const editMeta = useCallback((patch: Partial<PlateMeta>) => {
@@ -512,65 +519,76 @@ export default function App() {
     || state.grade.camera.optics.softness > 0;
 
   /**
-   * The corner cluster. The landing carries the 4-cut door and the theme
-   * toggle; the editor adds the three effect windows Film Studio keeps in its
-   * own bar — Color Lab, Tone Curve and Camera Effects.
+   * The 4-cut door. On the landing it sits alone above the theme toggle; in the
+   * editor it leads the four tool discs of the utility bar under the stage.
    */
-  const floatingCluster = (withTools: boolean) => (
-    <div className={`float-cluster${withTools ? ' in-stage' : ''}`} data-testid="float-cluster">
+  const fourCutButton = (
+    <button
+      type="button"
+      className="tool-fab"
+      onClick={openFourCutModal}
+      aria-label="4컷 프레임"
+      title="4컷 프레임"
+      data-testid="fourcut-fab"
+      data-tool="fourcut"
+    >
+      <span className="fourcut-grid" aria-hidden>
+        <i /><i /><i /><i />
+      </span>
+    </button>
+  );
+
+  /** The four tool discs, centre of the utility bar: 4-cut, Color Lab, Tone Curve, Camera Effects. */
+  const toolDiscs = (
+    <>
+      {fourCutButton}
       <button
         type="button"
-        className="tool-fab"
-        onClick={openFourCutModal}
-        aria-label="4컷 프레임"
-        title="4컷 프레임"
-        data-testid="fourcut-fab"
-        data-tool="fourcut"
+        className={`tool-fab${mixerActive ? ' on' : ''}`}
+        onClick={() => dispatch({ type: 'open-modal', modal: 'colorlab' })}
+        aria-label="Color Lab"
+        title="Color Lab"
+        data-testid="colorlab-fab"
+        data-tool="colorlab"
       >
-        <span className="fourcut-grid" aria-hidden>
-          <i /><i /><i /><i />
-        </span>
+        <IconPalette size={16} />
+        {mixerActive && <span className="dot-active" aria-hidden />}
       </button>
-      {withTools && (
-        <>
-          <button
-            type="button"
-            className={`tool-fab${mixerActive ? ' on' : ''}`}
-            onClick={() => dispatch({ type: 'open-modal', modal: 'colorlab' })}
-            aria-label="Color Lab"
-            title="Color Lab"
-            data-testid="colorlab-fab"
-            data-tool="colorlab"
-          >
-            <IconPalette size={16} />
-            {mixerActive && <span className="dot-active" aria-hidden />}
-          </button>
-          <button
-            type="button"
-            className={`tool-fab${curvesActive ? ' on' : ''}`}
-            onClick={() => dispatch({ type: 'open-modal', modal: 'tonecurve' })}
-            aria-label="Tone Curve"
-            title="Tone Curve"
-            data-testid="tonecurve-fab"
-            data-tool="tonecurve"
-          >
-            <IconSpline size={16} />
-            {curvesActive && <span className="dot-active" aria-hidden />}
-          </button>
-          <button
-            type="button"
-            className={`tool-fab${cameraActive ? ' on' : ''}`}
-            onClick={() => dispatch({ type: 'open-modal', modal: 'camera' })}
-            aria-label="Camera Effects"
-            title="Camera Effects"
-            data-testid="cameraeffects-fab"
-            data-tool="camera"
-          >
-            <IconCamera size={16} />
-            {cameraActive && <span className="dot-active" aria-hidden />}
-          </button>
-        </>
-      )}
+      <button
+        type="button"
+        className={`tool-fab${curvesActive ? ' on' : ''}`}
+        onClick={() => dispatch({ type: 'open-modal', modal: 'tonecurve' })}
+        aria-label="Tone Curve"
+        title="Tone Curve"
+        data-testid="tonecurve-fab"
+        data-tool="tonecurve"
+      >
+        <IconSpline size={16} />
+        {curvesActive && <span className="dot-active" aria-hidden />}
+      </button>
+      <button
+        type="button"
+        className={`tool-fab${cameraActive ? ' on' : ''}`}
+        onClick={() => dispatch({ type: 'open-modal', modal: 'camera' })}
+        aria-label="Camera Effects"
+        title="Camera Effects"
+        data-testid="cameraeffects-fab"
+        data-tool="camera"
+      >
+        <IconCamera size={16} />
+        {cameraActive && <span className="dot-active" aria-hidden />}
+      </button>
+    </>
+  );
+
+  /**
+   * The corner cluster. The landing carries the 4-cut door and the theme
+   * toggle; over the stage only the theme toggle is left — the four tools now
+   * live in the utility bar below. `inStage` tells the two apart.
+   */
+  const floatingCluster = (inStage: boolean) => (
+    <div className={`float-cluster${inStage ? ' in-stage' : ''}`} data-testid="float-cluster">
+      {!inStage && fourCutButton}
       {themeFab}
     </div>
   );
@@ -660,9 +678,11 @@ export default function App() {
   }
 
   const padDefault = engine.plate.defaults(state.frame.style).padPct;
+  const frameLabel = state.frame.enabled ? FRAME_MAP[state.frame.style].label : '프레임 꺼짐';
   const plateSizeLabel = (() => {
     const media = activeMedia;
     if (!media) return '';
+    if (!state.frame.enabled) return `프레임 없음 · 원본 ${media.width}×${media.height}`;
     const pad = Math.round((state.frame.padPct ?? padDefault) * 10) / 10;
     return `원본 ${media.width}×${media.height} · 여백 ${pad}%`;
   })();
@@ -682,14 +702,9 @@ export default function App() {
           onChange={(backdrop) => dispatch({ type: 'set-frame', patch: { backdrop } })}
         />
 
-        <div className="topbar-meta">
-          <span className="media-name" title={activeMedia?.name}>{activeMedia?.name}</span>
-          <span className="media-spec">{activeMedia?.width}×{activeMedia?.height}{activeMedia?.kind === 'video' ? ` · ${state.trim.end.toFixed(1)}s` : ''}</span>
-        </div>
-
         <div className="topbar-actions">
           <button type="button" className="chip on desktop-only" onClick={openFilterModal}>{filterLabel}</button>
-          <button type="button" className="chip desktop-only" onClick={openFrameModal}>{FRAME_MAP[state.frame.style].label}</button>
+          <button type="button" className="chip desktop-only" onClick={openFrameModal}>{frameLabel}</button>
           <button
             type="button"
             className="chip swap-btn"
@@ -740,27 +755,59 @@ export default function App() {
           {floatingCluster(true)}
         </div>
 
-        {mediaKind === 'video' && (
-          <section className="transport" aria-label="재생과 트림">
-            <button
-              type="button"
-              className="play-btn"
-              aria-label={state.playing ? '일시정지' : '재생'}
-              onClick={togglePlay}
-              data-testid="play-button"
-            >
-              {state.playing ? <IconPause size={20} /> : <IconPlay size={20} />}
-            </button>
-            <Timeline
-              duration={state.trim.end || activeMedia?.duration || 0}
-              trim={state.trim}
-              time={state.currentTime}
-              playing={state.playing}
-              onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
-              onSeek={seek}
-            />
-          </section>
-        )}
+        {/* One bar for both kinds: what is open on the left, the four tools in
+            the middle, and — for a clip — the playback sheet on the right. */}
+        <section
+          className={`utility-bar${mediaKind === 'video' && playbackOpen ? ' is-playback' : ''}`}
+          aria-label="파일 정보와 도구"
+          data-testid="utility-bar"
+        >
+          {mediaKind === 'video' && playbackOpen && (
+            <div className="playback-overlay" data-testid="playback-overlay">
+              <button
+                type="button"
+                className="play-btn"
+                aria-label={state.playing ? '일시정지' : '재생'}
+                onClick={togglePlay}
+                data-testid="play-button"
+              >
+                {state.playing ? <IconPause size={18} /> : <IconPlay size={18} />}
+              </button>
+              <Timeline
+                duration={state.trim.end || activeMedia?.duration || 0}
+                trim={state.trim}
+                time={state.currentTime}
+                playing={state.playing}
+                onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
+                onSeek={seek}
+              />
+            </div>
+          )}
+
+          <div className="utility-meta">
+            <span className="media-name" title={activeMedia?.name}>{activeMedia?.name}</span>
+            <span className="media-spec">
+              {activeMedia?.width}×{activeMedia?.height}
+              {mediaKind === 'video' ? ` · ${(state.trim.end || activeMedia?.duration || 0).toFixed(1)}s` : ''}
+            </span>
+          </div>
+
+          <div className="utility-tools">{toolDiscs}</div>
+
+          <button
+            type="button"
+            className={`playback-toggle${mediaKind === 'video' && playbackOpen ? ' on' : ''}`}
+            onClick={() => setPlaybackOpen((open) => !open)}
+            disabled={mediaKind !== 'video'}
+            aria-disabled={mediaKind !== 'video'}
+            aria-expanded={mediaKind === 'video' ? playbackOpen : false}
+            aria-label="재생 · 트림 바"
+            title={mediaKind === 'video' ? '재생 · 트림 바' : '영상에서 열립니다'}
+            data-testid="playback-overlay-toggle"
+          >
+            <IconPlayback size={17} />
+          </button>
+        </section>
 
         <FilterStrip
           selection={state.filter}
@@ -779,7 +826,7 @@ export default function App() {
           <button type="button" className="dock-btn" onClick={openFrameModal} data-testid="dock-frame">
             <IconFrame size={21} />
             <span>프레임 선택</span>
-            <small>{FRAME_MAP[state.frame.style].label}</small>
+            <small>{frameLabel}</small>
           </button>
           <button type="button" className="dock-btn" onClick={() => dispatch({ type: 'open-modal', modal: 'adjust' })} data-testid="dock-adjust">
             <IconSliders size={21} />
@@ -864,7 +911,7 @@ export default function App() {
           media={activeMedia!}
           trim={state.trim}
           filterLabel={filterLabel}
-          frameLabel={FRAME_MAP[state.frame.style].label}
+          frameLabel={frameLabel}
           plateSize={plateSizeLabel}
           onExportStill={exportStillHandler}
           onExportMovie={exportMovieHandler}

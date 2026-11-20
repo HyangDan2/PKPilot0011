@@ -435,12 +435,41 @@ button.portal-item:disabled:hover { background: transparent; }
 .strip-card.margarine { border-style: dashed; }
 .strip-card.margarine .strip-thumb { color: var(--accent); }
 
-/* ── transport ─────────────────────────────────────────────────────────── */
-.transport {
-  display: flex; align-items: center; gap: 12px; padding: 6px 10px;
+/* ── utility bar: file info · four tools · playback toggle ─────────────── */
+.utility-bar {
+  --pb-toggle: 40px;
+  --pb-gap: 8px;
+  position: relative; display: flex; align-items: center; gap: 8px;
+  min-height: 54px; padding: 5px 8px 5px 10px;
   border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); flex: 0 0 auto;
 }
-.play-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--accent); flex: 0 0 auto; }
+.utility-meta { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.utility-meta .media-name { max-width: 100%; font-size: 12px; line-height: 1.35; }
+.utility-meta .media-spec { font-size: 10px; }
+.utility-tools { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.utility-tools .tool-fab { width: 32px; height: 32px; box-shadow: none; }
+/* The sheet covers everything to the left of its own toggle, never the toggle. */
+.playback-overlay {
+  position: absolute; left: 0; top: 0; bottom: 0; right: calc(var(--pb-toggle) + var(--pb-gap) + 8px);
+  z-index: 2; display: flex; align-items: center; gap: 8px;
+  padding: 2px 6px 2px 8px; border-radius: var(--radius) 0 0 var(--radius);
+  background: var(--surface);
+}
+.playback-overlay .timeline { flex: 1; min-width: 0; }
+.playback-overlay .timeline-bar { margin: 0 6px; }
+.playback-overlay .timeline-read { font-size: 9.5px; padding: 0 6px; }
+.utility-bar.is-playback .utility-meta,
+.utility-bar.is-playback .utility-tools { visibility: hidden; }
+.playback-toggle {
+  width: var(--pb-toggle); height: 40px; flex: 0 0 auto; margin-left: auto; padding: 0;
+  display: inline-grid; place-items: center; border-radius: 12px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink-soft);
+  transition: border-color 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+.playback-toggle:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+.playback-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-veil); }
+.playback-toggle:disabled { opacity: 0.34; cursor: not-allowed; color: var(--muted); }
+.play-btn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--accent); flex: 0 0 auto; }
 .play-btn:hover { background: var(--surface-3); }
 .timeline { flex: 1; min-width: 0; }
 .timeline-bar { position: relative; height: 26px; margin: 0 8px; cursor: pointer; touch-action: none; }
@@ -527,6 +556,16 @@ button.portal-item:disabled:hover { background: transparent; }
 .triple input { min-width: 0; }
 
 .frame-options { display: flex; flex-direction: column; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.frame-enable {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 16px; padding: 10px 14px; border: 1px solid var(--line-strong);
+  border-radius: 12px; background: linear-gradient(120deg, var(--accent-veil), var(--surface-2));
+}
+.frame-enable .toggle { flex: 1; padding: 0; }
+/* Off: the choices stay exactly where they were, only out of reach. */
+.frame-scope { display: block; margin: 0; padding: 0; border: 0; min-width: 0; transition: opacity 0.16s ease; }
+.frame-scope.is-off { opacity: 0.42; pointer-events: none; }
+.frame-scope.is-off .frame-card.selected { box-shadow: none; }
 .toggle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .frame-foot, .adjust-foot, .fourcut-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
@@ -674,6 +713,12 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .workbench { gap: 10px; padding-top: 12px; }
   .dock { max-width: 640px; width: 100%; margin: 0 auto; }
   .stage { border-radius: 20px; }
+  /* A wide bar has room for the three zones: info left, tools on the centre
+     line, the playback door at the right end. */
+  .utility-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+  .utility-meta { min-width: 0; }
+  .utility-tools { justify-self: center; }
+  .playback-toggle { justify-self: end; margin-left: 0; }
 }
 
 @media (max-width: 640px) {

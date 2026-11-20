@@ -80,11 +80,13 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   hint?: string;
   disabled?: boolean;
+  /** Test hook on the label itself: the checkbox is visually hidden by CSS. */
+  testId?: string;
 }
 
-export function Toggle({ label, checked, onChange, hint, disabled }: ToggleProps) {
+export function Toggle({ label, checked, onChange, hint, disabled, testId }: ToggleProps) {
   return (
-    <label className={`toggle${disabled ? ' disabled' : ''}`}>
+    <label className={`toggle${disabled ? ' disabled' : ''}`} data-testid={testId} data-checked={checked ? 'true' : 'false'}>
       <span className="toggle-text">
         <span>{label}</span>
         {hint && <small>{hint}</small>}

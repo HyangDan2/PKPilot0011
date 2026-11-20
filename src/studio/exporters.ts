@@ -45,11 +45,48 @@ function paintTo(canvas: HTMLCanvasElement, plate: SPPlateApi, layout: PlateLayo
   plate.paint(ctx, layout);
 }
 
-/** Full-resolution 1:1 plate of the current still. */
+/** The framed export's counterpart: the graded picture, edge to edge. */
+function paintPlain(canvas: HTMLCanvasElement, picture: CanvasImageSource | null, width: number, height: number): void {
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('캔버스를 만들지 못했습니다.');
+  ctx.clearRect(0, 0, width, height);
+  if (!picture) return;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(picture, 0, 0, width, height);
+}
+
+function blobOf(canvas: HTMLCanvasElement, format: 'jpeg' | 'png', quality: number): Promise<Blob> {
+  const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => result ? resolve(result) : reject(new Error('이미지를 만들지 못했습니다.')), mime, quality);
+  });
+}
+
+/** Full-resolution 1:1 plate of the current still. Frame off = the picture alone. */
 export async function exportStill(context: StillExportContext, format: 'jpeg' | 'png', quality = 0.94): Promise<StillResult> {
   const grader = new PhotoGrader();
   try {
     const { media } = context;
+    const stem = media.name.replace(/\.[^.]+$/, '') || 'plate';
+    if (context.frame.enabled === false) {
+      const graded = context.image && grader.available
+        ? await grader.render({ source: context.image, grade: context.grade, width: media.width, height: media.height, inputGuard: context.inputGuard })
+        : null;
+      const canvas = document.createElement('canvas');
+      paintPlain(canvas, graded ?? context.image, Math.max(2, Math.round(media.width)), Math.max(2, Math.round(media.height)));
+      const blob = await blobOf(canvas, format, quality);
+      return {
+        blob,
+        filename: `${stem}-Nordlys.${format === 'png' ? 'png' : 'jpg'}`,
+        width: canvas.width,
+        height: canvas.height,
+      };
+    }
     const graded = context.image
       ? await grader.render({ source: context.image, grade: context.grade, width: media.width, height: media.height, inputGuard: context.inputGuard })
       : null;
@@ -78,11 +115,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
     }
     const canvas = document.createElement('canvas');
     paintTo(canvas, context.plate, layout);
-    const mime = format === 'png' ? 'image/png' : 'image/jpeg';
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((result) => result ? resolve(result) : reject(new Error('이미지를 만들지 못했습니다.')), mime, quality);
-    });
-    const stem = media.name.replace(/\.[^.]+$/, '') || 'plate';
+    const blob = await blobOf(canvas, format, quality);
     return {
       blob,
       filename: `${stem}-Nordlys.${format === 'png' ? 'png' : 'jpg'}`,
@@ -106,12 +139,20 @@ export interface MovieExportContext {
   inputGuard?: 0 | 1;
 }
 
+export interface PlannedMoviePlate {
+  photo: { width: number; height: number };
+  width: number;
+  height: number;
+  /** null with the frame off: the film already is the picture. */
+  layout: PlateLayout | null;
+}
+
 /** What the finished movie plate will be, before a single frame is encoded. */
 export async function planMoviePlate(
   context: MovieExportContext,
   options: VideoExportOptions,
   grader: PhotoGrader,
-): Promise<{ layout: PlateLayout; photo: { width: number; height: number } }> {
+): Promise<PlannedMoviePlate> {
   await grader.prepare(context.grade);
   const cap = plateEdgeCap(options.resolution, grader.maxTextureSize);
   const requested = {
@@ -119,11 +160,27 @@ export async function planMoviePlate(
     height: Math.max(2, context.media.height),
   };
   const scale = Math.min(1, cap / Math.max(requested.width, requested.height));
+  const scaled = {
+    width: Math.max(2, Math.round(requested.width * scale)),
+    height: Math.max(2, Math.round(requested.height * scale)),
+  };
+
+  // Frame off: the film's own frame, no margins and no band, still on the
+  // encoder's even grid.
+  if (context.frame.enabled === false) {
+    const plain = clampPlateSize({
+      photo: scaled,
+      cap,
+      minPhoto: 96,
+      layoutFor: (photo) => ({ W: photo.width, H: photo.height }),
+    });
+    const width = evenSize(plain.photo.width);
+    const height = evenSize(plain.photo.height);
+    return { photo: { width, height }, width, height, layout: null };
+  }
+
   const planned = clampPlateSize({
-    photo: {
-      width: Math.max(2, Math.round(requested.width * scale)),
-      height: Math.max(2, Math.round(requested.height * scale)),
-    },
+    photo: scaled,
     cap,
     layoutFor: (photo) => buildPlateLayout({
       plate: context.plate, emblems: context.emblems, frame: context.frame, meta: context.meta,
@@ -135,7 +192,7 @@ export async function planMoviePlate(
   // even grid — 1081px of band becomes 1080px of band, nothing else moves.
   planned.layout.W = evenSize(planned.layout.W);
   planned.layout.H = evenSize(planned.layout.H);
-  return planned;
+  return { photo: planned.photo, width: planned.layout.W, height: planned.layout.H, layout: planned.layout };
 }
 
 /**
@@ -162,6 +219,11 @@ export async function exportMovie(
           time: seconds, inputGuard: context.inputGuard,
         });
       }
+      if (!layout) {
+        // Frame off: the graded frame itself, at the clip's own ratio.
+        if (source) paintPlain(out, grader.available ? grader.canvas : source, planned.width, planned.height);
+        return;
+      }
       if (out.width !== layout.W || out.height !== layout.H) {
         out.width = layout.W;
         out.height = layout.H;
@@ -177,8 +239,8 @@ export async function exportMovie(
       sourceWidth: context.media.width,
       sourceHeight: context.media.height,
       includeAudio: options.includeAudio,
-      outputWidth: layout.W,
-      outputHeight: layout.H,
+      outputWidth: planned.width,
+      outputHeight: planned.height,
       renderFrame,
       onProgress,
       signal,

@@ -15,7 +15,7 @@ import { routeFiles } from '../src/media/route';
 import { specFields, withSpecFallback } from '../src/media/spec';
 import { STAGE_MAX_TYPE_BOOST, STAGE_TYPE_TARGET_CSS, stageTypeBoost, virtualPhotoBox } from '../src/studio/render';
 import { initialStudio, studioReducer } from '../src/state/studio';
-import type { MediaInfo } from '../src/types/studio';
+import { DEFAULT_FRAME, type MediaInfo } from '../src/types/studio';
 
 /* ------------------------------------------------------------------ audio */
 
@@ -280,6 +280,34 @@ describe('the plate keeps Shutterplate’s designed proportions', () => {
     expect(layout.theme).toBe('midnight');
     expect(layout.themeLabel).toBe('Midnight');
     expect((layout.cells as unknown[]).length).toBe(4);
+  });
+});
+
+/* ------------------------------------------------------------ frame switch */
+
+describe('the frame switch', () => {
+  it('starts with the frame on', () => {
+    expect(DEFAULT_FRAME.enabled).toBe(true);
+    expect(initialStudio().frame.enabled).toBe(true);
+  });
+
+  it('keeps the chosen style, margin and ink while the frame is off', () => {
+    let state = studioReducer(initialStudio(), {
+      type: 'set-frame',
+      patch: { style: 'polaroid', padPct: 7.5, emblemMono: true, showCaption: false },
+    });
+    state = studioReducer(state, { type: 'set-frame', patch: { enabled: false } });
+    expect(state.frame.enabled).toBe(false);
+    expect(state.frame).toMatchObject({ style: 'polaroid', padPct: 7.5, emblemMono: true, showCaption: false });
+    // and switching it back on restores exactly what was there
+    state = studioReducer(state, { type: 'set-frame', patch: { enabled: true } });
+    expect(state.frame).toMatchObject({ enabled: true, style: 'polaroid', padPct: 7.5, emblemMono: true, showCaption: false });
+  });
+
+  it('bumps the revision on the switch, so the stage repaints at once', () => {
+    const before = initialStudio();
+    const after = studioReducer(before, { type: 'set-frame', patch: { enabled: false } });
+    expect(after.revision).toBe(before.revision + 1);
   });
 });
 

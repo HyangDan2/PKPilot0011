@@ -206,6 +206,15 @@ export const IconSpline = (p: IconProps) => (
   </svg>
 );
 
+/** Playback — the clip's play/trim bar, opened over the utility bar. */
+export const IconPlayback = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="2.5" y="4.5" width="19" height="11" rx="2" />
+    <path d="M10 7.4v5.2l4.2-2.6z" fill="currentColor" stroke="none" />
+    <path d="M6 19h12" />
+  </svg>
+);
+
 /** Camera — Camera Effects. */
 export const IconCamera = (p: IconProps) => (
   <svg {...base(p)}>

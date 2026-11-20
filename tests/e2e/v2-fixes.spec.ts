@@ -3,13 +3,18 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * The four layout fixes of 2026-11-20, checked in a real browser:
- *  1. the corner cluster is one vertical column, in the landing and the stage;
- *  2. the photo bar is gone from the workbench — 4-cut slots live in the window;
- *  3. RETRO 90 closes the filter shelf, after the whole Margarine catalogue;
- *  4. the print is centred in a symmetric stage on a phone, where only the
- *     frame's copy is boosted (the band stays slim) — and it is Shutterplate's
- *     own geometry everywhere else.
+ * The layout of 2026-11-20, checked in a real browser:
+ *  1. the landing keeps a two-disc corner column (4-cut + theme); over the stage
+ *     only the theme toggle is left, and the four tools moved into the utility
+ *     bar under the stage;
+ *  2. the utility bar is file info | four tool discs | playback toggle, in one
+ *     line on a phone and a desktop; the playback toggle is disabled for a
+ *     photo and opens the playing sheet over the bar for a clip;
+ *  3. the frame switch prints the picture alone, and its choices come back;
+ *  4. the photo bar is gone from the workbench — 4-cut slots live in the window;
+ *  5. RETRO 90 closes the filter shelf, after the whole Margarine catalogue;
+ *  6. the print is centred in a symmetric stage on a phone, where only the
+ *     frame's copy is boosted (the band stays slim).
  */
 
 const SHOT_DIR = process.env.SHOT_DIR || resolve(process.cwd(), '../../downloads');
@@ -43,13 +48,23 @@ async function openSamplePhoto(page: Page) {
   await page.waitForTimeout(800);
 }
 
-const FABS = ['[data-testid="fourcut-fab"]', '[data-testid="colorlab-fab"]', '[data-testid="tonecurve-fab"]', '[data-testid="cameraeffects-fab"]'];
-const COLUMN = [...FABS, '[data-testid="theme-fab"]'];
+async function openSampleVideo(page: Page) {
+  await page.locator('.sample-card.video').click();
+  await expect(page.locator('video.source-video')).toHaveCount(1);
+  await expect.poll(async () => page.evaluate(() => {
+    const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
+    return video ? video.readyState : 0;
+  })).toBeGreaterThanOrEqual(2);
+  await page.waitForTimeout(700);
+}
 
-/* ── 1. one column down the corner ────────────────────────────────────────── */
+const TOOL_DISCS = ['fourcut-fab', 'colorlab-fab', 'tonecurve-fab', 'cameraeffects-fab'];
+
+/* ── 1. one theme toggle over the stage, four tools in the bar ───────────── */
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
-  test(`corner cluster: one vertical column at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+  test(`utility bar: info · four tools · playback at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+    mkdirSync(SHOT_DIR, { recursive: true });
     await page.setViewportSize(viewport);
     await page.goto('/');
 
@@ -60,45 +75,220 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
 
     await openSamplePhoto(page);
 
-    const direction = await page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="float-cluster"]')!).flexDirection);
-    expect(direction).toBe('column');
+    // Over the stage only the theme toggle is left in the corner.
+    const cluster = page.locator('.stage-wrap > [data-testid="float-cluster"].in-stage');
+    await expect(cluster).toHaveCount(1);
+    await expect(cluster.locator('button')).toHaveCount(1);
+    await expect(cluster.locator('[data-testid="theme-fab"]')).toBeVisible();
+    await expect(cluster.locator('[data-testid="fourcut-fab"]')).toHaveCount(0);
+    await expect(cluster.locator('.tool-fab')).toHaveCount(0);
 
-    const items = await boxes(page, COLUMN);
-    const centre = (box: Box) => box.x + box.width / 2;
-    for (let i = 0; i < items.length; i += 1) {
-      // one axis: every disc shares the column's centre line
-      expect(Math.abs(centre(items[i]) - centre(items[0])), `disc ${i} is off the column`).toBeLessThanOrEqual(1);
-      // and they stack: each one starts below the one above it
-      if (i > 0) expect(items[i].y, `disc ${i} is not below the disc above it`).toBeGreaterThanOrEqual(items[i - 1].y + items[i - 1].height);
-    }
-    // the theme toggle closes the column at the bottom
-    expect(items[items.length - 1].y).toBeGreaterThan(items[items.length - 2].y);
-    // the seven-pixel gap the brief asks for
-    for (let i = 1; i < items.length; i += 1) {
-      expect(Math.abs((items[i].y - (items[i - 1].y + items[i - 1].height)) - 7)).toBeLessThanOrEqual(1);
-    }
+    // The bar itself: one line, in order, between the stage and the strip.
+    const bar = page.locator('[data-testid="utility-bar"]');
+    await expect(bar).toBeVisible();
+    for (const id of TOOL_DISCS) await expect(page.locator(`[data-testid="${id}"]`)).toBeVisible();
+    await expect(bar.locator('.utility-meta .media-name')).toHaveText(/^sample-01\.(jpg|jpeg|png)$/i);
+    const spec = (await bar.locator('.utility-meta .media-spec').textContent())!.trim();
+    expect(spec).toMatch(/^\d+×\d+$/);
 
-    const [cluster, plate, strip, dock, stage] = await boxes(page, [
-      '[data-testid="float-cluster"]', '[data-testid="plate-canvas"]', '[data-testid="filter-strip"]', '.dock', '.stage',
+    const [barBox, meta, tools, toggle, stageBox, strip] = await boxes(page, [
+      '[data-testid="utility-bar"]', '.utility-meta', '.utility-tools',
+      '[data-testid="playback-overlay-toggle"]', '.stage', '[data-testid="filter-strip"]',
     ]);
-    // The column covers nothing below the stage, and it stays inside the stage.
-    // On a wide stage the print clears it; on a phone the print is centred, so
-    // the discs float over its own right corner rather than across the copy.
-    if (viewport.width > 820) {
-      expect(overlaps(cluster, plate), 'cluster overlaps the plate').toBe(false);
-    } else {
-      expect(cluster.x, 'cluster runs across the print').toBeGreaterThan(plate.x + plate.width * 0.6);
-    }
-    expect(overlaps(cluster, strip), 'cluster overlaps the filter strip').toBe(false);
-    expect(overlaps(cluster, dock), 'cluster overlaps the dock').toBe(false);
-    // and it stays inside the stage it belongs to
-    expect(cluster.x).toBeGreaterThanOrEqual(stage.x);
-    expect(cluster.x + cluster.width).toBeLessThanOrEqual(stage.x + stage.width + 1);
-    expect(cluster.y + cluster.height).toBeLessThanOrEqual(stage.y + stage.height + 1);
+    expect(barBox.y).toBeGreaterThanOrEqual(stageBox.y + stageBox.height - 1);
+    expect(barBox.y + barBox.height).toBeLessThanOrEqual(strip.y + 1);
+    expect(meta.x + meta.width).toBeLessThanOrEqual(tools.x + 1);
+    expect(tools.x + tools.width).toBeLessThanOrEqual(toggle.x + 1);
+    expect(overlaps(meta, tools, 0)).toBe(false);
+    expect(overlaps(tools, toggle, 0)).toBe(false);
+    // the toggle is the right-hand end of the bar
+    expect(barBox.x + barBox.width - (toggle.x + toggle.width)).toBeLessThanOrEqual(12);
+    // one line: nothing wraps out of the bar, and it fits the window
+    const overflow = await bar.evaluate((element) => ({
+      scroll: element.scrollWidth, client: element.clientWidth,
+      barHeight: element.getBoundingClientRect().height,
+    }));
+    expect(overflow.scroll).toBeLessThanOrEqual(overflow.client + 1);
+    expect(overflow.barHeight).toBeLessThanOrEqual(70);
+    expect(barBox.x + barBox.width).toBeLessThanOrEqual(viewport.width - 8);
+
+    // A photo has the playback toggle, but grey and inert.
+    const playback = page.locator('[data-testid="playback-overlay-toggle"]');
+    await expect(playback).toBeVisible();
+    await expect(playback).toBeDisabled();
+    await expect(playback).toHaveAttribute('aria-disabled', 'true');
+    await playback.click({ force: true }).catch(() => undefined);
+    await expect(page.locator('[data-testid="playback-overlay"]')).toHaveCount(0);
+
+    if (viewport.width < 820) await shot(page, 'nordlys_v4_mobile_photo.png');
+    else await shot(page, 'nordlys_v4_desktop.png');
   });
 }
 
-/* ── 2. the photo bar left the workbench ──────────────────────────────────── */
+/* ── 2. the frame switch: picture alone, choices kept ─────────────────────── */
+
+test('frame off: the picture alone on the stage, and every choice comes back', async ({ page }) => {
+  test.setTimeout(120_000);
+  mkdirSync(SHOT_DIR, { recursive: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await openSamplePhoto(page);
+
+  const canvas = page.locator('[data-testid="plate-canvas"]');
+  await expect(canvas).toHaveAttribute('data-frame-enabled', 'true');
+  const framed = await canvas.evaluate((element) => ({ ...(element as HTMLCanvasElement).dataset }));
+  expect(Number(framed.band)).toBeGreaterThan(0);
+  expect(Number(framed.padX)).toBeGreaterThan(0);
+
+  await page.locator('[data-testid="dock-frame"]').click();
+  await expect(page.locator('[data-testid="frame-modal"]')).toBeVisible();
+  const toggle = page.locator('[data-testid="frame-enabled-toggle"]');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('data-checked', 'true');
+  await expect(page.locator('[data-testid="frame-modal"] .frame-enable')).toContainText('프레임 사용');
+  await page.waitForTimeout(500);
+  await shot(page, 'nordlys_v4_frame_modal.png');
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('data-checked', 'false');
+  // the eleven frames and the options stay in place, out of reach and dimmed
+  await expect(page.locator('[data-testid="frame-modal"] fieldset.frame-scope.is-off')).toHaveCount(1);
+  await expect(page.locator('[data-testid="frame-modal"] [data-frame-id="polaroid"]')).toBeDisabled();
+  await expect(page.locator('[data-testid="dock-frame"] small')).toHaveText('프레임 꺼짐');
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="frame-modal"]')).toHaveCount(0);
+  await expect.poll(async () => canvas.getAttribute('data-frame-enabled')).toBe('false');
+
+  // No margin, band or emblem: the picture at its own ratio, filling the room.
+  const plain = await canvas.evaluate((element) => {
+    const node = element as HTMLCanvasElement;
+    const box = node.getBoundingClientRect();
+    return { data: { ...node.dataset }, width: box.width, height: box.height };
+  });
+  expect(plain.data.band).toBe('0');
+  expect(plain.data.padX).toBe('0');
+  expect(plain.data.padTop).toBe('0');
+  const spec = (await page.locator('[data-testid="utility-bar"] .media-spec').textContent())!.trim();
+  const [sourceW, sourceH] = spec.split('×').map(Number);
+  const [plainW, plainH] = plain.data.plateSize!.split('x').map(Number);
+  expect(plainW / plainH).toBeCloseTo(sourceW / sourceH, 2);
+  const [roomW, roomH] = plain.data.room!.split('x').map(Number);
+  // contained in the room, one edge exactly on it
+  expect(Math.abs(plainW - roomW) <= 1 || Math.abs(plainH - roomH) <= 1).toBe(true);
+  expect(plain.width).toBeLessThanOrEqual(roomW + 1);
+  expect(plain.height).toBeLessThanOrEqual(roomH + 1);
+  await page.waitForTimeout(400);
+  await shot(page, 'nordlys_v4_mobile_noframe.png');
+
+  // The 1:1 still is the picture itself, at the file's own size.
+  await page.locator('[data-testid="dock-export"]').click();
+  await expect(page.locator('[data-testid="export-modal"]')).toBeVisible();
+  await expect(page.locator('[data-testid="export-modal"]')).toContainText(`프레임 없음 · 원본 ${sourceW}×${sourceH}`);
+  await expect(page.locator('[data-testid="export-modal"] .export-table')).toContainText(`${sourceW}×${sourceH}px`, { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+
+  // Back on, the same frame and margin are exactly where they were.
+  await page.locator('[data-testid="dock-frame"]').click();
+  await page.locator('[data-testid="frame-enabled-toggle"]').click();
+  await expect(page.locator('[data-testid="frame-enabled-toggle"]')).toHaveAttribute('data-checked', 'true');
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => canvas.getAttribute('data-frame-enabled')).toBe('true');
+  const restored = await canvas.evaluate((element) => ({ ...(element as HTMLCanvasElement).dataset }));
+  expect(restored.plateSize).toBe(framed.plateSize);
+  expect(restored.band).toBe(framed.band);
+  await expect(page.locator('[data-testid="dock-frame"] small')).toHaveText('Classic Gallery');
+});
+
+test('4-cut apply switches the frame back on, so the plate is actually printed', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+  await openSamplePhoto(page);
+
+  // Turn the frame off first.
+  await page.locator('[data-testid="dock-frame"]').click();
+  await page.locator('[data-testid="frame-enabled-toggle"]').click();
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => page.locator('[data-testid="plate-canvas"]').getAttribute('data-frame-enabled')).toBe('false');
+
+  // Then apply a 4-cut plate from the utility bar's own door.
+  await page.locator('[data-testid="fourcut-fab"]').click();
+  await expect(page.locator('[data-testid="fourcut-modal"]')).toBeVisible();
+  await page.locator('[data-testid="fourcut-modal"] [data-frame-id="contact"]').click();
+  await page.getByRole('button', { name: /이 프레임으로 적용/ }).click();
+  await expect(page.locator('[data-testid="fourcut-modal"]')).toHaveCount(0);
+  await expect.poll(async () => page.locator('[data-testid="plate-canvas"]').getAttribute('data-frame-enabled')).toBe('true');
+  await page.waitForTimeout(900);
+});
+
+/* ── 3. the clip's playback sheet over the bar ────────────────────────────── */
+
+test('video: the playback toggle opens the sheet beside itself, never under it', async ({ page }) => {
+  test.setTimeout(120_000);
+  mkdirSync(SHOT_DIR, { recursive: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await openSampleVideo(page);
+
+  const bar = page.locator('[data-testid="utility-bar"]');
+  const toggle = page.locator('[data-testid="playback-overlay-toggle"]');
+  await expect(bar.locator('.utility-meta .media-spec')).toHaveText(/1280×720 · [1-9][\d.]*s/);
+  await expect(bar.locator('.utility-meta .media-name')).toHaveText('sample-clip.mp4');
+
+  // A clip: the toggle is live, and the bar opens on the file info + tools.
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('[data-testid="playback-overlay"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="play-button"]')).toHaveCount(0);
+  await page.waitForTimeout(400);
+  await shot(page, 'nordlys_v4_mobile_video_bar.png');
+
+  const closedBox = (await bar.boundingBox())!;
+
+  await toggle.click();
+  const overlay = page.locator('[data-testid="playback-overlay"]');
+  await expect(overlay).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(overlay.locator('[data-testid="play-button"]')).toBeVisible();
+  await expect(overlay.locator('.timeline')).toBeVisible();
+  await expect(overlay.locator('.timeline-bar')).toBeVisible();
+
+  // The toggle is not under the sheet: the two boxes do not touch.
+  const [toggleBox, overlayBox] = await boxes(page, ['[data-testid="playback-overlay-toggle"]', '[data-testid="playback-overlay"]']);
+  expect(overlaps(toggleBox, overlayBox)).toBe(false);
+  expect(overlayBox.x + overlayBox.width).toBeLessThanOrEqual(toggleBox.x + 1);
+  // and it is still the thing at that point of the screen
+  const hit = await page.evaluate(({ x, y }) => {
+    const element = document.elementFromPoint(x, y);
+    return !!element?.closest('[data-testid="playback-overlay-toggle"]');
+  }, { x: toggleBox.x + toggleBox.width / 2, y: toggleBox.y + toggleBox.height / 2 });
+  expect(hit, 'the toggle is covered by the sheet').toBe(true);
+
+  // The bar keeps its height: the sheet swaps in, it does not push the page.
+  const openBox = (await bar.boundingBox())!;
+  expect(Math.abs(openBox.height - closedBox.height)).toBeLessThanOrEqual(2);
+  await page.waitForTimeout(400);
+  await shot(page, 'nordlys_v4_mobile_video_overlay.png');
+
+  // The sheet is the transport: play/pause works from it.
+  const play = page.locator('[data-testid="play-button"]');
+  const label = await play.getAttribute('aria-label');
+  await play.click();
+  await expect(play).toHaveAttribute('aria-label', label === '일시정지' ? '재생' : '일시정지');
+
+  // Closing it brings the file info and the four tools straight back.
+  await toggle.click();
+  await expect(overlay).toHaveCount(0);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(bar.locator('.utility-meta')).toBeVisible();
+  await expect(bar.locator('.utility-tools')).toBeVisible();
+  for (const id of TOOL_DISCS) await expect(page.locator(`[data-testid="${id}"]`)).toBeVisible();
+});
+
+/* ── 4. the photo bar left the workbench ──────────────────────────────────── */
 
 test('4-cut slots live in the window only, and survive the trip to a single frame', async ({ page }) => {
   test.setTimeout(180_000);
@@ -142,7 +332,7 @@ test('4-cut slots live in the window only, and survive the trip to a single fram
   await page.keyboard.press('Escape');
 });
 
-/* ── 3. RETRO 90 after Margarine ──────────────────────────────────────────── */
+/* ── 5. RETRO 90 after Margarine ──────────────────────────────────────────── */
 
 test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
@@ -194,7 +384,7 @@ test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ 
   await page.keyboard.press('Escape');
 });
 
-/* ── 4. Shutterplate's own frame size ─────────────────────────────────────── */
+/* ── 6. Shutterplate's own frame size ─────────────────────────────────────── */
 
 async function plateFacts(page: Page) {
   return page.evaluate(() => {

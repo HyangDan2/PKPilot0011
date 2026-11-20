@@ -26,7 +26,7 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
     <Modal
       kicker="FRAME MODAL"
       title="프레임 선택"
-      description="지금 필터가 입혀진 화면으로 그린 단일 11종 플레이트입니다. 여백과 잉크도 여기서 바로 바꿉니다."
+      description="지금 필터가 입혀진 화면으로 그린 단일 11종 플레이트입니다. 프레임을 끄면 여백 없이 사진만 저장하고, 여백과 잉크는 여기서 바로 바꿉니다."
       onClose={onClose}
       size="wide"
       testId="frame-modal"
@@ -37,6 +37,19 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
         </div>
       }
     >
+      <section className="frame-enable">
+        <Toggle
+          label="프레임 사용"
+          hint="끄면 여백·메타 인화 없이 필터·보정된 원본 화면만 출력"
+          checked={frame.enabled}
+          testId="frame-enabled-toggle"
+          onChange={(value) => onPatch({ enabled: value })}
+        />
+      </section>
+
+      {/* Off keeps every choice underneath it, only out of reach: switching
+          back on restores the same style, margin and ink at once. */}
+      <fieldset className={`frame-scope${frame.enabled ? '' : ' is-off'}`} disabled={!frame.enabled}>
       <section className="filter-section">
         <h3 className="section-title">단일 11종 <small>사진 · 영상</small></h3>
         <div className="frame-grid">
@@ -144,6 +157,7 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
           />
         )}
       </section>
+      </fieldset>
     </Modal>
   );
 }

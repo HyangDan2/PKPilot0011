@@ -72,6 +72,8 @@ export interface MediaInfo {
 }
 
 export interface FrameSettings {
+  /** Off = no margin, no band, no emblem: only the graded picture is printed. */
+  enabled: boolean;
   style: FrameId;
   emblem: string;          // 'auto' | 'none' | emblem id
   emblemMono: boolean;     // All Black ink
@@ -86,6 +88,7 @@ export interface FrameSettings {
 }
 
 export const DEFAULT_FRAME: FrameSettings = {
+  enabled: true,
   style: 'gallery',
   emblem: 'auto',
   emblemMono: false,

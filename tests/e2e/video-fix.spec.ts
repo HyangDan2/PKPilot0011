@@ -87,9 +87,14 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   expect(box!.y).toBeGreaterThanOrEqual(0);
 
   // ── 2. the clip's real length reached the stage (durationchange) ──
-  await expect(page.locator('.media-spec')).toHaveText(/·\s*[1-9][\d.]*s/, { timeout: 20_000 });
+  await expect(page.locator('[data-testid="utility-bar"] .media-spec')).toHaveText(/·\s*[1-9][\d.]*s/, { timeout: 20_000 });
 
   // ── 3. a decoded frame lands on the plate, even with the clip paused ──
+  // The transport lives in the playback sheet over the utility bar now.
+  const overlayToggle = page.locator('[data-testid="playback-overlay-toggle"]');
+  await expect(overlayToggle).toBeEnabled();
+  await overlayToggle.click();
+  await expect(page.locator('[data-testid="playback-overlay"]')).toBeVisible();
   const play = page.locator('[data-testid="play-button"]');
   await expect(play).toHaveAttribute('aria-label', '일시정지');
   await play.click();
