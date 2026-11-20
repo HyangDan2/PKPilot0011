@@ -13,26 +13,58 @@ import { ColorLabModal } from './components/ColorLabModal';
 import { ToneCurveOverlay, curvesTouched } from './components/ToneCurveOverlay';
 import { CameraEffectsModal } from './components/CameraEffectsModal';
 import { BackdropSwitch, ThemeFab } from './components/ThemeControls';
+import { OpenModal } from './components/OpenModal';
+import { LeftSidebar, type SideTab } from './components/LeftSidebar';
+import { RightSidebar } from './components/RightSidebar';
+import { WorkspaceStrip } from './components/WorkspaceStrip';
 import {
   IconCamera, IconDownload, IconFilm, IconFrame, IconPalette, IconPause, IconPlay, IconPlayback, IconSliders, IconSpline, IconSwap,
 } from './components/Icons';
-import { initialStudio, studioReducer } from './state/studio';
+import { initialStudio, sessionOf, studioReducer, type StudioSession } from './state/studio';
 import { loadPlateEngine, type SPEmblemsApi, type SPPlateApi } from './plate/engine';
-import { loadPhoto, loadVideo, releaseMedia } from './media/load';
+import { loadPhoto, loadVideo, mountCachedVideo, parkCachedVideo, releaseMedia } from './media/load';
 import { closeAudioPath, openAudioPath, rebindAudioTrack, releaseAudio } from './media/audio';
 import { routeFiles } from './media/route';
-import { withSpecFallback } from './media/spec';import { buildFrameThumbs, buildFilterThumbs, type Cancellation } from './studio/thumbnails';
+import { withSpecFallback } from './media/spec';
+import {
+  entriesFromFiles,
+  scanDirectory,
+  visibleWorkspace,
+  type FsDirectoryHandle,
+  type WorkspaceFile,
+  type WorkspaceFilter,
+  type WorkspaceSort,
+} from './media/workspace';
+import { clearWorkspaceThumbs } from './media/workspaceThumbs';
+import { clearFilmThumbs, type FilmThumbSource } from './studio/filmThumbs';
+import { buildFrameThumbs, buildFilterThumbs, type Cancellation } from './studio/thumbnails';
 import { PhotoGrader, thumbnailSource } from './studio/grading';
 import { exportMovie, exportStill } from './studio/exporters';
 import { ALL_FILTERS, margarinePreset } from './filters/catalog';
-import { FRAME_MAP, SINGLE_FRAME_DEFS } from './plate/frames';
+import { FRAME_MAP, FRAMES, SINGLE_FRAME_DEFS } from './plate/frames';
 import { assetUrl } from './utils/assets';
 import type { FilterOption } from './filters/catalog';
-import type { FrameId, PlateMeta, VideoExportOptions } from './types/studio';
+import type { FrameId, MediaInfo, PlateMeta, VideoExportOptions } from './types/studio';
 import type { ExportProgress } from './export/videoExporter';
 import type { StillResult } from './studio/exporters';
 
 const THEME_KEY = 'hd2-theme';
+/** The studio splits into three columns from this width; below it the phone UI stays. */
+const PC_QUERY = '(min-width: 1024px)';
+/** A file's whole editing session: the grade, the frame and the cut. */
+type EntrySession = StudioSession & { meta: Partial<PlateMeta> };
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => (typeof window === 'undefined' ? false : window.matchMedia(query).matches));
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const onChange = () => setMatches(media.matches);
+    onChange();
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, [query]);
+  return matches;
+}
 
 export default function App() {
   const [state, dispatch] = useReducer(studioReducer, undefined, initialStudio);
@@ -53,14 +85,48 @@ export default function App() {
   /** Tone Curve is an overlay on the stage, not a sheet: it lives over the print. */
   const [toneCurveOpen, setToneCurveOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+
+  /* ── the wide studio ─────────────────────────────────────────────────────── */
+  const isPC = useMediaQuery(PC_QUERY);
+  const [sideTab, setSideTab] = useState<SideTab>('film');
+  const [workspace, setWorkspace] = useState<{ name: string; entries: WorkspaceFile[] } | null>(null);
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(null);
+  const [stripSort, setStripSort] = useState<WorkspaceSort>('name');
+  const [stripFilter, setStripFilter] = useState<WorkspaceFilter>('all');
+  const [stripCollapsed, setStripCollapsed] = useState(false);
+  const [stripHeight, setStripHeight] = useState(178);
+  const [scanning, setScanning] = useState<string | null>(null);
+  const [openModal, setOpenModal] = useState(false);
+  const [openBusy, setOpenBusy] = useState<string | false>(false);
+
   const bank = useRef<MediaBank>({ photos: new Map(), video: null });
   const fileRef = useRef<File | null>(null);
   const cancelRef = useRef<Cancellation | null>(null);
   const replaceRef = useRef<HTMLInputElement | null>(null);
+  /** One edit session per open file, kept for as long as the workspace is. */
+  const sessions = useRef(new Map<string, EntrySession>());
+  /** Clips already decoded, so walking back to one is instant. */
+  const clips = useRef(new Map<string, { video: HTMLVideoElement; info: MediaInfo }>());
+  const activeEntryRef = useRef<string | null>(null);
+  const scanRef = useRef<{ cancelled: boolean } | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const metaRef = useRef(metaOverride);
+  metaRef.current = metaOverride;
+  const sidebarFrameKey = useRef('');
+  const sidebarFrameToken = useRef<Cancellation>({ cancelled: false });
 
   const activeMedia = state.media[state.activePhoto] ?? state.media[0] ?? null;
   const mediaKind = activeMedia?.kind ?? 'photo';
   const photos = useMemo(() => state.media.filter((item) => item.kind === 'photo'), [state.media]);
+  const stripOrder = useMemo(
+    () => (workspace ? visibleWorkspace(workspace.entries, stripSort, stripFilter) : []),
+    [workspace, stripSort, stripFilter],
+  );
+  const activeStripIndex = useMemo(
+    () => stripOrder.findIndex((entry) => entry.id === activeEntryId),
+    [stripOrder, activeEntryId],
+  );
 
   /* The playback sheet belongs to the clip that opened it: any new media
      (or a swap) starts from the plain bar again. */
@@ -145,6 +211,34 @@ export default function App() {
     setFourCutThumbs({});
   }, [state.media]);
 
+  /**
+   * Leaving a workspace releases everything it brought in — the decoded clips,
+   * the image elements, the strip's stills — so a plain file afterwards starts
+   * from a clean page.
+   */
+  /** Leaving a workspace releases everything it brought in — the decoded clips,
+   *  the image elements, the strip's stills — so a plain file afterwards starts
+   *  from a clean page. */
+  const leaveWorkspace = useCallback(() => {
+    sessions.current.clear();
+    clips.current.forEach(({ video, info }) => {
+      video.pause();
+      video.remove();
+      releaseMedia(info);
+    });
+    clips.current.clear();
+    bank.current.photos.clear();
+    clearWorkspaceThumbs();
+    clearFilmThumbs();
+    scanRef.current && (scanRef.current.cancelled = true);
+    scanRef.current = null;
+    activeEntryRef.current = null;
+    setActiveEntryId(null);
+    setWorkspace(null);
+    setScanning(null);
+    setOpenBusy(false);
+  }, []);
+
   const addPhotos = useCallback(async (files: File[]) => {
     if (!files.length) return;
     setBusy('사진을 더하는 중…');
@@ -167,6 +261,7 @@ export default function App() {
     setError(null);
     try {
       const loaded = await Promise.all(files.slice(0, 4).map((file) => loadPhoto(file)));
+      leaveWorkspace();
       clearMedia();
       bank.current.photos = new Map(loaded.map((item) => [item.info.url, item.drawable]));
       dispatch({ type: 'open-photos', media: loaded.map((item) => item.info) });
@@ -176,7 +271,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [clearMedia]);
+  }, [clearMedia, leaveWorkspace]);
 
   const openVideo = useCallback(async (file: File) => {
     setBusy('영상을 분석하는 중…');
@@ -185,6 +280,7 @@ export default function App() {
       // loadVideo already parked its element in the page (the decoder needs it
       // there); clearing here only drops the previous clip.
       const loaded = await loadVideo(file);
+      leaveWorkspace();
       clearMedia();
       bank.current.video = loaded.video;
       fileRef.current = file;
@@ -196,7 +292,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [clearMedia]);
+  }, [clearMedia, leaveWorkspace]);
 
   /** One picker for both kinds: a clip opens the studio, stills fill the plate. */
   const openAny = useCallback((files: File[]) => {
@@ -233,6 +329,177 @@ export default function App() {
     await loadSample(SAMPLES[0]);
     dispatch({ type: 'set-frame', patch: { style: frameId } });
   }, [loadSample, state.media.length]);
+
+  /* ── workspace: files, sessions, walking the strip ──────────────────────── */
+
+  /** Save the look on screen under the file that owns it. */
+  const rememberSession = useCallback((id: string | null) => {
+    if (!id) return;
+    sessions.current.set(id, { ...sessionOf(stateRef.current), meta: metaRef.current });
+  }, []);
+
+  const pruneClips = useCallback((keepId: string) => {
+    // Three decoded clips is plenty to walk back through; the fourth gives its
+    // decoder and its blob URL back.
+    while (clips.current.size > 3) {
+      const oldest = [...clips.current.keys()].find((id) => id !== keepId);
+      if (!oldest) break;
+      const entry = clips.current.get(oldest);
+      if (entry) {
+        entry.video.pause();
+        entry.video.remove();
+        releaseMedia(entry.info);
+      }
+      clips.current.delete(oldest);
+    }
+  }, []);
+
+  /** Open one file of the workspace, carrying its own session back with it. */
+  const activateEntry = useCallback(async (entry: WorkspaceFile) => {
+    if (!entry || activeEntryRef.current === entry.id) return;
+    rememberSession(activeEntryRef.current);
+    setBusy(entry.kind === 'photo' ? '사진을 여는 중…' : '영상을 분석하는 중…');
+    setError(null);
+    try {
+      if (entry.kind === 'photo') {
+        const loaded = await loadPhoto(entry.file);
+        bank.current.photos.set(loaded.info.url, loaded.drawable);
+        // Twelve decoded stills is more than a walk back needs; the rest drop
+        // their elements and the blob URL that fed them.
+        while (bank.current.photos.size > 12) {
+          const oldest = [...bank.current.photos.keys()].find((url) => url !== loaded.info.url);
+          if (!oldest) break;
+          bank.current.photos.delete(oldest);
+          try { URL.revokeObjectURL(oldest); } catch { /* already gone */ }
+        }
+        const previous = bank.current.video;
+        if (previous) {
+          parkCachedVideo(previous);
+          releaseAudio(previous);
+        }
+        bank.current.video = null;
+        fileRef.current = null;
+        dispatch({ type: 'open-photos', media: [loaded.info] });
+        setMuted(true);
+      } else {
+        const cached = clips.current.get(entry.id);
+        const loaded = cached ?? await loadVideo(entry.file);
+        if (!cached) {
+          clips.current.set(entry.id, loaded);
+          pruneClips(entry.id);
+        }
+        const previous = bank.current.video;
+        if (previous && previous !== loaded.video) {
+          parkCachedVideo(previous);
+          releaseAudio(previous);
+        }
+        mountCachedVideo(loaded.video);
+        bank.current.video = loaded.video;
+        fileRef.current = entry.file;
+        dispatch({ type: 'open-video', media: loaded.info });
+        setMuted(true);
+      }
+      const saved = sessions.current.get(entry.id);
+      if (saved) {
+        const { meta, ...session } = saved;
+        setMetaOverride(meta);
+        dispatch({ type: 'restore-session', session });
+      } else {
+        setMetaOverride({});
+      }
+      activeEntryRef.current = entry.id;
+      setActiveEntryId(entry.id);
+      setView('editor');
+      setPlaybackOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '파일을 열지 못했습니다.');
+    } finally {
+      setBusy(false);
+    }
+  }, [pruneClips, rememberSession]);
+
+  /** A folder is ready: drop what was open and walk in. */
+  const startWorkspace = useCallback((name: string, entries: WorkspaceFile[]) => {
+    if (!entries.length) {
+      setOpenBusy(false);
+      setError('이 폴더에 지원하는 사진·동영상이 없습니다 — JPEG · PNG · WebP 사진 또는 MP4 · MOV · WebM 영상을 넣어 주세요.');
+      return;
+    }
+    // Whatever the studio held belongs to the old session.
+    stateRef.current.media.forEach(releaseMedia);
+    const previous = bank.current.video;
+    if (previous) {
+      previous.pause();
+      releaseAudio(previous);
+      previous.remove();
+    }
+    bank.current.video = null;
+    bank.current.photos.clear();
+    fileRef.current = null;
+    sessions.current.clear();
+    clips.current.forEach(({ video, info }) => { video.pause(); video.remove(); releaseMedia(info); });
+    clips.current.clear();
+    clearWorkspaceThumbs();
+    activeEntryRef.current = null;
+    setActiveEntryId(null);
+    setMetaOverride({});
+    setWorkspace({ name, entries });
+    setStripSort('name');
+    setStripFilter('all');
+    setStripCollapsed(false);
+    setOpenBusy(false);
+    setOpenModal(false);
+    void activateEntry(entries[0]);
+  }, [activateEntry]);
+
+  const openWorkspaceFiles = useCallback((files: File[], recursive: boolean) => {
+    setOpenBusy('폴더 목록을 읽는 중…');
+    const scan = entriesFromFiles(files, { recursive });
+    if (!scan.entries.length) {
+      setOpenBusy(false);
+      setError('이 폴더에 지원하는 사진·동영상이 없습니다.');
+      return;
+    }
+    startWorkspace(scan.name, scan.entries);
+  }, [startWorkspace]);
+
+  const openWorkspaceHandle = useCallback(async (handle: FsDirectoryHandle, recursive: boolean) => {
+    setOpenBusy('폴더 목록을 읽는 중…');
+    const signal = { cancelled: false };
+    scanRef.current = signal;
+    let found = 0;
+    try {
+      const entries = await scanDirectory(handle, {
+        recursive,
+        signal,
+        onBatch: (batch) => {
+          found += batch.length;
+          setOpenBusy(`폴더 목록을 읽는 중… ${found}개`);
+        },
+      });
+      if (signal.cancelled) return;
+      if (!entries.length) {
+        setOpenBusy(false);
+        setError('이 폴더에 지원하는 사진·동영상이 없습니다.');
+        return;
+      }
+      startWorkspace(handle.name, entries);
+    } catch (err) {
+      setOpenBusy(false);
+      setError(err instanceof Error ? err.message : '폴더를 열지 못했습니다.');
+    }
+  }, [startWorkspace]);
+
+  /** ← / → through the strip, in the order it is showing. */
+  const stepWorkspace = useCallback((direction: -1 | 1) => {
+    if (!workspace) return;
+    const order = visibleWorkspace(workspace.entries, stripSort, stripFilter);
+    if (!order.length) return;
+    const index = order.findIndex((entry) => entry.id === activeEntryRef.current);
+    const next = index < 0 ? 0 : Math.min(order.length - 1, Math.max(0, index + direction));
+    const target = order[next];
+    if (target && target.id !== activeEntryRef.current) void activateEntry(target);
+  }, [workspace, stripSort, stripFilter, activateEntry]);
 
   /* ── actions ────────────────────────────────────────────────────────────── */
   const selectFilter = useCallback((filter: FilterOption) => {
@@ -276,19 +543,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, activeMedia?.url, engine !== null]);
 
-  const openFilterModal = useCallback(() => {
-    dispatch({ type: 'open-modal', modal: 'filter' });
-    setThumbsLoading(true);
-    cancelRef.current = { cancelled: false };
-    const token = cancelRef.current;
-    const source = activeMedia
-      ? thumbnailSource({
-          kind: activeMedia.kind,
-          drawable: bank.current.photos.get(activeMedia.url) ?? null,
-          video: bank.current.video,
-        })
-      : null;
-    if (!source || !activeMedia) { setThumbsLoading(false); return; }
+  /** Every filter's own still, for the film shelf and the filter window. */
+  const buildAllFilterThumbs = useCallback((options: { token?: Cancellation; silent?: boolean } = {}) => {
+    if (!activeMedia) return;
+    const token = options.token ?? { cancelled: false };
+    if (!options.token) {
+      if (cancelRef.current) cancelRef.current.cancelled = true;
+      cancelRef.current = { cancelled: false };
+      setThumbsLoading(true);
+    }
+    const source = thumbnailSource({
+      kind: activeMedia.kind,
+      drawable: bank.current.photos.get(activeMedia.url) ?? null,
+      video: bank.current.video,
+    });
+    if (!source) { if (!options.silent) setThumbsLoading(false); return; }
     void withGrader((grader) => buildFilterThumbs({
       grader,
       source,
@@ -297,23 +566,34 @@ export default function App() {
       filters: ALL_FILTERS,
       onEach: (key, url) => setFilterThumbs((previous) => ({ ...previous, [key]: url })),
       token,
-    })).finally(() => { if (!token.cancelled) setThumbsLoading(false); });
+    })).finally(() => { if (!options.silent && !token.cancelled) setThumbsLoading(false); });
   }, [activeMedia, withGrader]);
 
-  const buildThumbs = useCallback((ids: FrameId[], target: React.Dispatch<React.SetStateAction<Record<string, string>>>) => {
+  const openFilterModal = useCallback(() => {
+    dispatch({ type: 'open-modal', modal: 'filter' });
+    buildAllFilterThumbs();
+  }, [buildAllFilterThumbs]);
+
+  const buildThumbs = useCallback((
+    ids: FrameId[],
+    target: React.Dispatch<React.SetStateAction<Record<string, string>>>,
+    options: { token?: Cancellation; silent?: boolean; width?: number } = {},
+  ) => {
     if (!engine || !activeMedia) return;
-    setThumbsLoading(true);
-    if (cancelRef.current) cancelRef.current.cancelled = true;
-    cancelRef.current = { cancelled: false };
-    const token = cancelRef.current;
+    const token = options.token ?? { cancelled: false };
+    if (!options.token) {
+      setThumbsLoading(true);
+      if (cancelRef.current) cancelRef.current.cancelled = true;
+      cancelRef.current = { cancelled: false };
+    }
     const source = thumbnailSource({
       kind: activeMedia.kind,
       drawable: bank.current.photos.get(activeMedia.url) ?? null,
       video: bank.current.video,
     });
-    if (!source) { setThumbsLoading(false); return; }
+    if (!source) { if (!options.silent) setThumbsLoading(false); return; }
     void withGrader(async (grader) => {
-      const width = 640;
+      const width = options.width ?? 640;
       const height = Math.max(120, Math.round(width * (activeMedia.height / Math.max(1, activeMedia.width))));
       const graded = await grader.render({ source, grade: state.grade, width, height });
       const slots = state.media.filter((item) => item.kind === 'photo').slice(0, 4).map((item) => {
@@ -328,7 +608,7 @@ export default function App() {
         onEach: (id, url) => target((previous) => ({ ...previous, [id]: url })),
         token,
       });
-      if (!token.cancelled) setThumbsLoading(false);
+      if (!options.silent && !token.cancelled) setThumbsLoading(false);
     });
   }, [engine, activeMedia, state.grade, state.frame, state.media, composedMeta, withGrader]);
 
@@ -346,6 +626,35 @@ export default function App() {
     if (cancelRef.current) cancelRef.current.cancelled = true;
     dispatch({ type: 'open-modal', modal: null });
   }, []);
+
+  /* ── the wide studio's shelves: previews are built once per open file ───── */
+  /** The frame the shelf's stills are graded from, one per open file. */
+  const filmThumbSource = useMemo<FilmThumbSource | null>(() => {
+    if (!activeMedia) return null;
+    const source = thumbnailSource({
+      kind: activeMedia.kind,
+      drawable: bank.current.photos.get(activeMedia.url) ?? null,
+      video: bank.current.video,
+    });
+    if (!source) return null;
+    return {
+      mediaKey: `${activeMedia.url}|${state.grade.filmId}`,
+      source,
+      width: activeMedia.width,
+      height: activeMedia.height,
+    };
+  }, [activeMedia, state.grade.filmId]);
+
+  useEffect(() => {
+    if (!isPC || view !== 'editor' || sideTab !== 'frame' || !activeMedia || !engine) return;
+    const key = `${activeMedia.url}|${state.grade.filmId}`;
+    if (sidebarFrameKey.current === key) return;
+    sidebarFrameKey.current = key;
+    sidebarFrameToken.current.cancelled = true;
+    sidebarFrameToken.current = { cancelled: false };
+    buildThumbs(FRAMES.map((frame) => frame.id), setFrameThumbs, { token: sidebarFrameToken.current, silent: true, width: 360 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPC, view, sideTab, activeMedia?.url, engine, state.grade.filmId]);
 
   /* ── 4-cut slots ────────────────────────────────────────────────────────── */
   const addFourCutFiles = useCallback(async (files: File[]) => {
@@ -480,17 +789,30 @@ export default function App() {
 
   /* ── keyboard ───────────────────────────────────────────────────────────── */
   useEffect(() => {
-    if (view !== 'editor' || state.modal) return;
+    if (view !== 'editor' || state.modal || openModal) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.target as HTMLElement)?.matches('input, textarea, select')) return;
-      if (event.key === 'f' || event.key === 'F') { event.preventDefault(); openFilterModal(); }
-      if (event.key === 'r' || event.key === 'R') { event.preventDefault(); openFrameModal(); }
+      // The wide studio keeps its two shelves on the rails: F and R show them
+      // instead of raising a sheet over the print.
+      if (event.key === 'f' || event.key === 'F') {
+        event.preventDefault();
+        if (isPC) setSideTab('film'); else openFilterModal();
+      }
+      if (event.key === 'r' || event.key === 'R') {
+        event.preventDefault();
+        if (isPC) setSideTab('frame'); else openFrameModal();
+      }
       if (event.key === 'e' || event.key === 'E') { event.preventDefault(); dispatch({ type: 'open-modal', modal: 'export' }); }
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && isPC && workspace) {
+        event.preventDefault();
+        stepWorkspace(event.key === 'ArrowRight' ? 1 : -1);
+      }
       if (event.code === 'Space' && mediaKind === 'video') { event.preventDefault(); togglePlay(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, state.modal, mediaKind, openFilterModal, openFrameModal, togglePlay]);
+  }, [view, state.modal, openModal, mediaKind, isPC, workspace, stepWorkspace, openFilterModal, openFrameModal, togglePlay]);
 
   /* ── stage gestures ─────────────────────────────────────────────────────── */
   const longPress = useLongPress(setShowOriginal);
@@ -600,13 +922,13 @@ export default function App() {
   );
 
   /**
-   * The corner cluster. The landing carries the 4-cut door and the theme
-   * toggle; over the stage only the theme toggle is left — the four tools now
-   * live in the utility bar below. `inStage` tells the two apart.
+   * The corner cluster. On the landing and over the wide stage only the
+   * 4-cut door and the theme toggle are left — the three colour tools live on
+   * the right rail there.
    */
   const floatingCluster = (inStage: boolean) => (
     <div className={`float-cluster${inStage ? ' in-stage' : ''}`} data-testid="float-cluster">
-      {!inStage && fourCutButton}
+      {(!inStage || isPC) && fourCutButton}
       {themeFab}
     </div>
   );
@@ -648,6 +970,22 @@ export default function App() {
     />
   );
 
+  /** The two-door window: only a wide screen offers a workspace as well. */
+  const openWindow = openModal && (
+    <OpenModal
+      busy={openBusy}
+      error={error}
+      onClose={() => { setOpenModal(false); setOpenBusy(false); }}
+      onFiles={(files) => { setOpenModal(false); openAny(files); }}
+      onWorkspaceFiles={(files, recursive) => openWorkspaceFiles(files, recursive)}
+      onWorkspaceHandle={(handle, recursive) => void openWorkspaceHandle(handle, recursive)}
+      onDismissError={() => setError(null)}
+    />
+  );
+
+  /** Asking for a file: a modal on a wide screen, the plain picker on a phone. */
+  const requestOpen = () => { if (isPC) setOpenModal(true); };
+
   /* ── landing ────────────────────────────────────────────────────────────── */
   if (engineError) {
     return (
@@ -658,7 +996,7 @@ export default function App() {
     );
   }
 
-  if (view === 'landing' || !state.media.length) {
+  if (view === 'landing' || (!state.media.length && !workspace)) {
     return (
       <>
         <Landing
@@ -675,10 +1013,12 @@ export default function App() {
           onContinue={() => setView('editor')}
           onDismissError={() => setError(null)}
           onResetExif={() => setMetaOverride({})}
-          onClear={() => { clearMedia(); dispatch({ type: 'clear-media' }); setView('landing'); }}
+          onClear={() => { clearMedia(); leaveWorkspace(); dispatch({ type: 'clear-media' }); setView('landing'); }}
           onEmblemMono={(mono) => dispatch({ type: 'set-frame', patch: { emblemMono: mono } })}
+          onOpenRequest={isPC ? requestOpen : undefined}
         />
         {fourCutWindow}
+        {openWindow}
         {replaceInput}
         {floatingCluster(false)}
         {error && !fourCutWindow && (
@@ -700,6 +1040,15 @@ export default function App() {
     );
   }
 
+  if (!state.media.length) {
+    return (
+      <div className="boot">
+        <span className="spinner" aria-hidden />
+        <p>워크스페이스를 여는 중…</p>
+      </div>
+    );
+  }
+
   const padDefault = engine.plate.defaults(state.frame.style).padPct;
   const frameLabel = state.frame.enabled ? FRAME_MAP[state.frame.style].label : '프레임 꺼짐';
   const plateSizeLabel = (() => {
@@ -710,8 +1059,22 @@ export default function App() {
     return `원본 ${media.width}×${media.height} · 여백 ${pad}%`;
   })();
 
+  const saveShareChip = (
+    <button
+      type="button"
+      className="chip save-chip"
+      onClick={() => dispatch({ type: 'open-modal', modal: 'export' })}
+      aria-label="저장 / 공유"
+      title="저장 / 공유"
+      data-testid="topbar-save"
+    >
+      <IconDownload size={14} />
+      <span className="chip-label">저장 / 공유</span>
+    </button>
+  );
+
   return (
-    <div className="app">
+    <div className={`app${isPC ? ' is-pc' : ''}`}>
       <header className="topbar">
         {/* The Web-HQ lockup every HD2Lab title carries: [mark] HD2Lab | Nordlys. */}
         <button
@@ -727,8 +1090,20 @@ export default function App() {
         </button>
 
         <div className="topbar-actions">
-          <button type="button" className="chip on desktop-only" onClick={openFilterModal}>{filterLabel}</button>
-          <button type="button" className="chip desktop-only" onClick={openFrameModal}>{frameLabel}</button>
+          <button
+            type="button"
+            className="chip on desktop-only"
+            onClick={() => { if (isPC) setSideTab('film'); else openFilterModal(); }}
+          >
+            {filterLabel}
+          </button>
+          <button
+            type="button"
+            className="chip desktop-only"
+            onClick={() => { if (isPC) setSideTab('frame'); else openFrameModal(); }}
+          >
+            {frameLabel}
+          </button>
           <BackdropSwitch
             backdrop={state.frame.backdrop}
             onChange={(backdrop) => dispatch({ type: 'set-frame', patch: { backdrop } })}
@@ -736,145 +1111,273 @@ export default function App() {
           <button
             type="button"
             className="chip swap-btn"
-            onClick={() => replaceRef.current?.click()}
+            onClick={() => (isPC ? setOpenModal(true) : replaceRef.current?.click())}
             aria-label="사진 · 영상 교체"
             data-testid="replace-button"
           >
-            <IconSwap size={14} /> 교체
+            <IconSwap size={14} /> <span className="chip-label">교체</span>
           </button>
+          {isPC && saveShareChip}
           <NavMenu
             hasMedia={state.media.length > 0}
             isPhoto={mediaKind === 'photo'}
             emblemMono={state.frame.emblemMono}
             samples={SAMPLES}
             onHome={() => setView('landing')}
-            onReplace={() => replaceRef.current?.click()}
+            onReplace={() => (isPC ? setOpenModal(true) : replaceRef.current?.click())}
             onResetExif={() => setMetaOverride({})}
-            onClear={() => { clearMedia(); dispatch({ type: 'clear-media' }); setView('landing'); }}
+            onClear={() => { clearMedia(); leaveWorkspace(); dispatch({ type: 'clear-media' }); setView('landing'); }}
             onEmblemMono={(mono) => dispatch({ type: 'set-frame', patch: { emblemMono: mono } })}
             onSample={(sample) => void loadSample(sample)}
           />
         </div>
       </header>
 
-      <main className="workbench">
-        <div className="stage-wrap" {...longPress}>
-          <Stage
-            plate={engine.plate}
-            emblems={engine.emblems}
-            media={state.media}
-            activePhoto={state.activePhoto}
-            bank={bank.current}
-            grade={state.grade}
-            frame={state.frame}
-            meta={composedMeta}
-            trim={state.trim}
-            playing={state.playing}
-            showOriginal={showOriginal}
-            inputGuard={state.inputGuard}
+      {isPC ? (
+        <main className="workbench is-pc" data-testid="studio-pc">
+          <LeftSidebar
+            tab={sideTab}
+            onTab={setSideTab}
+            media={activeMedia}
+            index={activeStripIndex >= 0 ? activeStripIndex + 1 : null}
+            total={stripOrder.length}
+            workspaceName={workspace?.name ?? null}
             revision={state.revision}
-            muted={muted}
-            onToggleMute={toggleMute}
-            onTime={onTime}
-            onDuration={onDuration}
-            onTogglePlay={togglePlay}
+            filter={state.filter}
+            strength={state.grade.adjustments.filmStrength}
+            thumbSource={filmThumbSource}
+            onSelectFilter={selectFilter}
+            onStrength={(value) => dispatch({ type: 'patch-adjustments', patch: { filmStrength: value } })}
+            thumbsLoading={thumbsLoading}
+            frame={state.frame}
+            mediaKind={mediaKind}
+            defaultPad={padDefault}
+            meta={composedMeta}
+            frameThumbs={frameThumbs}
+            onPatchFrame={(patch) => dispatch({ type: 'set-frame', patch })}
+            onMeta={editMeta}
+            onOpenFourCut={openFourCutModal}
           />
-          {toneCurveOpen && (
-            <ToneCurveOverlay
-              curves={state.grade.curves}
-              onCurves={(curves) => dispatch({ type: 'set-curves', curves })}
-              onClose={() => setToneCurveOpen(false)}
-            />
-          )}
-          {showOriginal && <span className="compare-badge">원본</span>}
-          {floatingCluster(true)}
-        </div>
 
-        {/* One bar for both kinds: what is open on the left, the four tools in
-            the middle, and — for a clip — the playback sheet on the right. */}
-        <section
-          className={`utility-bar${mediaKind === 'video' && playbackOpen ? ' is-playback' : ''}`}
-          aria-label="파일 정보와 도구"
-          data-testid="utility-bar"
-        >
-          {mediaKind === 'video' && playbackOpen && (
-            <div className="playback-overlay" data-testid="playback-overlay">
-              <button
-                type="button"
-                className="play-btn"
-                aria-label={state.playing ? '일시정지' : '재생'}
-                onClick={togglePlay}
-                data-testid="play-button"
-              >
-                {state.playing ? <IconPause size={18} /> : <IconPlay size={18} />}
-              </button>
-              <Timeline
-                duration={state.trim.end || activeMedia?.duration || 0}
+          <div className="pc-center">
+            <div className="stage-wrap" {...longPress}>
+              <Stage
+                plate={engine.plate}
+                emblems={engine.emblems}
+                media={state.media}
+                activePhoto={state.activePhoto}
+                bank={bank.current}
+                grade={state.grade}
+                frame={state.frame}
+                meta={composedMeta}
                 trim={state.trim}
-                time={state.currentTime}
                 playing={state.playing}
-                onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
-                onSeek={seek}
+                showOriginal={showOriginal}
+                inputGuard={state.inputGuard}
+                revision={state.revision}
+                muted={muted}
+                onToggleMute={toggleMute}
+                onTime={onTime}
+                onDuration={onDuration}
+                onTogglePlay={togglePlay}
               />
+              {toneCurveOpen && (
+                <ToneCurveOverlay
+                  curves={state.grade.curves}
+                  onCurves={(curves) => dispatch({ type: 'set-curves', curves })}
+                  onClose={() => setToneCurveOpen(false)}
+                />
+              )}
+              {showOriginal && <span className="compare-badge">원본</span>}
+              {floatingCluster(true)}
             </div>
-          )}
 
-          <div className="utility-meta">
-            <span className="media-name" title={activeMedia?.name}>{activeMedia?.name}</span>
-            <span className="media-spec">
-              {activeMedia?.width}×{activeMedia?.height}
-              {mediaKind === 'video' ? ` · ${(state.trim.end || activeMedia?.duration || 0).toFixed(1)}s` : ''}
-            </span>
+            {mediaKind === 'video' && (
+              <div className="pc-transport" data-testid="pc-transport">
+                <button
+                  type="button"
+                  className="play-btn"
+                  aria-label={state.playing ? '일시정지' : '재생'}
+                  onClick={togglePlay}
+                  data-testid="play-button"
+                >
+                  {state.playing ? <IconPause size={18} /> : <IconPlay size={18} />}
+                </button>
+                <Timeline
+                  duration={state.trim.end || activeMedia?.duration || 0}
+                  trim={state.trim}
+                  time={state.currentTime}
+                  playing={state.playing}
+                  onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
+                  onSeek={seek}
+                />
+                <span className="pc-spec">
+                  {activeMedia?.width}×{activeMedia?.height} · {(state.trim.end || activeMedia?.duration || 0).toFixed(1)}s
+                </span>
+              </div>
+            )}
+
+            {workspace && (
+              <WorkspaceStrip
+                name={workspace.name}
+                entries={workspace.entries}
+                activeId={activeEntryId}
+                sort={stripSort}
+                filter={stripFilter}
+                collapsed={stripCollapsed}
+                height={stripHeight}
+                scanning={scanning}
+                onSort={setStripSort}
+                onFilter={setStripFilter}
+                onCollapse={setStripCollapsed}
+                onHeight={setStripHeight}
+                onSelect={(entry) => void activateEntry(entry)}
+                onStep={stepWorkspace}
+                onOpenFolder={() => setOpenModal(true)}
+              />
+            )}
           </div>
 
-          <div className="utility-tools">{toolDiscs}</div>
+          <RightSidebar
+            filterLabel={filterLabel}
+            adjustments={state.grade.adjustments}
+            sharpening={state.grade.sharpening}
+            mediaKind={mediaKind}
+            duration={activeMedia?.duration ?? state.trim.end}
+            fps={activeMedia?.fps ?? 30}
+            inputGuard={state.inputGuard}
+            trim={state.trim}
+            active={{ mixer: mixerActive, curves: curvesActive, curveOpen: toneCurveOpen, camera: cameraActive }}
+            onAdjustments={(patch) => dispatch({ type: 'patch-adjustments', patch })}
+            onSharpening={(patch) => dispatch({ type: 'patch-sharpening', patch })}
+            onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
+            onInputGuard={(guard) => dispatch({ type: 'set-input-guard', guard })}
+            onReset={() => dispatch({ type: 'reset-grade' })}
+            onOpenColorLab={() => dispatch({ type: 'open-modal', modal: 'colorlab' })}
+            onOpenCamera={() => dispatch({ type: 'open-modal', modal: 'camera' })}
+            onToggleCurve={() => setToneCurveOpen((open) => !open)}
+          />
+        </main>
+      ) : (
+        <main className="workbench">
+          <div className="stage-wrap" {...longPress}>
+            <Stage
+              plate={engine.plate}
+              emblems={engine.emblems}
+              media={state.media}
+              activePhoto={state.activePhoto}
+              bank={bank.current}
+              grade={state.grade}
+              frame={state.frame}
+              meta={composedMeta}
+              trim={state.trim}
+              playing={state.playing}
+              showOriginal={showOriginal}
+              inputGuard={state.inputGuard}
+              revision={state.revision}
+              muted={muted}
+              onToggleMute={toggleMute}
+              onTime={onTime}
+              onDuration={onDuration}
+              onTogglePlay={togglePlay}
+            />
+            {toneCurveOpen && (
+              <ToneCurveOverlay
+                curves={state.grade.curves}
+                onCurves={(curves) => dispatch({ type: 'set-curves', curves })}
+                onClose={() => setToneCurveOpen(false)}
+              />
+            )}
+            {showOriginal && <span className="compare-badge">원본</span>}
+            {floatingCluster(true)}
+          </div>
 
-          <button
-            type="button"
-            className={`playback-toggle${mediaKind === 'video' && playbackOpen ? ' on' : ''}`}
-            onClick={() => setPlaybackOpen((open) => !open)}
-            disabled={mediaKind !== 'video'}
-            aria-disabled={mediaKind !== 'video'}
-            aria-expanded={mediaKind === 'video' ? playbackOpen : false}
-            aria-label="재생 · 트림 바"
-            title={mediaKind === 'video' ? '재생 · 트림 바' : '영상에서 열립니다'}
-            data-testid="playback-overlay-toggle"
+          {/* One bar for both kinds: what is open on the left, the four tools in
+              the middle, and — for a clip — the playback sheet on the right. */}
+          <section
+            className={`utility-bar${mediaKind === 'video' && playbackOpen ? ' is-playback' : ''}`}
+            aria-label="파일 정보와 도구"
+            data-testid="utility-bar"
           >
-            <IconPlayback size={17} />
-          </button>
-        </section>
+            {mediaKind === 'video' && playbackOpen && (
+              <div className="playback-overlay" data-testid="playback-overlay">
+                <button
+                  type="button"
+                  className="play-btn"
+                  aria-label={state.playing ? '일시정지' : '재생'}
+                  onClick={togglePlay}
+                  data-testid="play-button"
+                >
+                  {state.playing ? <IconPause size={18} /> : <IconPlay size={18} />}
+                </button>
+                <Timeline
+                  duration={state.trim.end || activeMedia?.duration || 0}
+                  trim={state.trim}
+                  time={state.currentTime}
+                  playing={state.playing}
+                  onTrim={(trim) => dispatch({ type: 'set-trim', trim })}
+                  onSeek={seek}
+                />
+              </div>
+            )}
 
-        <FilterStrip
-          selection={state.filter}
-          thumbs={stripThumbs}
-          margarineName={margarineName}
-          onSelect={selectFilter}
-          onOpenAll={openFilterModal}
-        />
+            <div className="utility-meta">
+              <span className="media-name" title={activeMedia?.name}>{activeMedia?.name}</span>
+              <span className="media-spec">
+                {activeMedia?.width}×{activeMedia?.height}
+                {mediaKind === 'video' ? ` · ${(state.trim.end || activeMedia?.duration || 0).toFixed(1)}s` : ''}
+              </span>
+            </div>
 
-        <nav className="dock" aria-label="스튜디오 도구">
-          <button type="button" className="dock-btn primary" onClick={openFilterModal} data-testid="dock-filter">
-            <IconFilm size={21} />
-            <span>필터 선택</span>
-            <small>{filterLabel}</small>
-          </button>
-          <button type="button" className="dock-btn" onClick={openFrameModal} data-testid="dock-frame">
-            <IconFrame size={21} />
-            <span>프레임 선택</span>
-            <small>{frameLabel}</small>
-          </button>
-          <button type="button" className="dock-btn" onClick={() => dispatch({ type: 'open-modal', modal: 'adjust' })} data-testid="dock-adjust">
-            <IconSliders size={21} />
-            <span>세부 보정</span>
-            <small>{Math.round(state.grade.adjustments.exposure * 100) / 100} EV</small>
-          </button>
-          <button type="button" className="dock-btn" onClick={() => dispatch({ type: 'open-modal', modal: 'export' })} data-testid="dock-export">
-            <IconDownload size={21} />
-            <span>저장 / 공유</span>
-            <small>{mediaKind === 'video' ? 'MP4 · H.264 + 사운드' : '원본 1:1'}</small>
-          </button>
-        </nav>
-      </main>
+            <div className="utility-tools">{toolDiscs}</div>
+
+            <button
+              type="button"
+              className={`playback-toggle${mediaKind === 'video' && playbackOpen ? ' on' : ''}`}
+              onClick={() => setPlaybackOpen((open) => !open)}
+              disabled={mediaKind !== 'video'}
+              aria-disabled={mediaKind !== 'video'}
+              aria-expanded={mediaKind === 'video' ? playbackOpen : false}
+              aria-label="재생 · 트림 바"
+              title={mediaKind === 'video' ? '재생 · 트림 바' : '영상에서 열립니다'}
+              data-testid="playback-overlay-toggle"
+            >
+              <IconPlayback size={17} />
+            </button>
+          </section>
+
+          <FilterStrip
+            selection={state.filter}
+            thumbs={stripThumbs}
+            margarineName={margarineName}
+            onSelect={selectFilter}
+            onOpenAll={openFilterModal}
+          />
+
+          <nav className="dock" aria-label="스튜디오 도구">
+            <button type="button" className="dock-btn primary" onClick={openFilterModal} data-testid="dock-filter">
+              <IconFilm size={21} />
+              <span>필터 선택</span>
+              <small>{filterLabel}</small>
+            </button>
+            <button type="button" className="dock-btn" onClick={openFrameModal} data-testid="dock-frame">
+              <IconFrame size={21} />
+              <span>프레임 선택</span>
+              <small>{frameLabel}</small>
+            </button>
+            <button type="button" className="dock-btn" onClick={() => dispatch({ type: 'open-modal', modal: 'adjust' })} data-testid="dock-adjust">
+              <IconSliders size={21} />
+              <span>세부 보정</span>
+              <small>{Math.round(state.grade.adjustments.exposure * 100) / 100} EV</small>
+            </button>
+            <button type="button" className="dock-btn" onClick={() => dispatch({ type: 'open-modal', modal: 'export' })} data-testid="dock-export">
+              <IconDownload size={21} />
+              <span>저장 / 공유</span>
+              <small>{mediaKind === 'video' ? 'MP4 · H.264 + 사운드' : '원본 1:1'}</small>
+            </button>
+          </nav>
+        </main>
+      )}
 
       {state.modal === 'filter' && (
         <FilterModal
@@ -934,9 +1437,9 @@ export default function App() {
           onClose={closeModal}
         />
       )}
-      {state.modal === 'export' && (
+      {state.modal === 'export' && activeMedia && (
         <ExportModal
-          media={activeMedia!}
+          media={activeMedia}
           trim={state.trim}
           filterLabel={filterLabel}
           frameLabel={frameLabel}
@@ -947,9 +1450,16 @@ export default function App() {
         />
       )}
 
+      {openWindow}
       {replaceInput}
 
       {thumbsLoading && <span className="sr-only" role="status">썸네일을 그리는 중</span>}
+      {busy && (
+        <div className="studio-busy" role="status" data-testid="studio-busy">
+          <span className="spinner" aria-hidden />
+          <p>{typeof busy === 'string' ? busy : '여는 중…'}</p>
+        </div>
+      )}
       {notice && (
         <div className="toast is-notice" role="status">
           {notice}

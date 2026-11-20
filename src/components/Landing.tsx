@@ -29,6 +29,8 @@ interface LandingProps {
   emblemMono: boolean;
   onOpenPhotos: (files: File[]) => void;
   onOpenVideo: (file: File) => void;
+  /** A wide screen opens the two-door modal instead of a bare file picker. */
+  onOpenRequest?: () => void;
   onLoadSample: (sample: SampleItem) => void;
   onPickFrame: (frame: FrameId) => void;
   onContinue: () => void;
@@ -62,7 +64,10 @@ export function Landing(props: LandingProps) {
 
   /** On the landing, "home" is the top of this scroll box — the title bar stays. */
   const toTop = () => scroll.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  const pickFiles = () => input.current?.click();
+  const pickFiles = () => {
+    if (props.onOpenRequest) props.onOpenRequest();
+    else input.current?.click();
+  };
 
   const route = (files: File[]) => {
     const picked = routeFiles(files);

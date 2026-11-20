@@ -49,7 +49,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   test.setTimeout(180_000);
   mkdirSync(SHOT_DIR, { recursive: true });
   const errors = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
 
   await page.locator('.sample-card.video').click();
@@ -191,10 +191,10 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
 });
 
-test('desktop: the ⋮ menu opens above the corner tools', async ({ page }) => {
+test('wide 1000×800: the ⋮ menu opens above the corner tools', async ({ page }) => {
   const errors = watch(page);
   // A short window is where the dropdown's bottom meets the floating cluster.
-  await page.setViewportSize({ width: 1280, height: 560 });
+  await page.setViewportSize({ width: 1000, height: 560 });
   await page.goto('/');
   await page.locator('.sample-card.photo').first().click();
   await expect(page.locator('[data-testid="plate-canvas"]')).toBeVisible();

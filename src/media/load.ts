@@ -282,3 +282,17 @@ export function releaseMedia(info: MediaInfo | null): void {
   if (!info) return;
   if (info.url.startsWith('blob:')) URL.revokeObjectURL(info.url);
 }
+
+/**
+ * A workspace keeps the clips it has opened; switching away parks the element
+ * off the page, and switching back puts the very same element in again — the
+ * decoder keeps what it already read.
+ */
+export function parkCachedVideo(video: HTMLVideoElement): void {
+  video.pause();
+  video.remove();
+}
+
+export function mountCachedVideo(video: HTMLVideoElement): void {
+  mountSourceVideo(video);
+}

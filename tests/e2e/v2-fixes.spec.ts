@@ -62,7 +62,7 @@ const TOOL_DISCS = ['fourcut-fab', 'colorlab-fab', 'tonecurve-fab', 'cameraeffec
 
 /* ── 1. one theme toggle over the stage, four tools in the bar ───────────── */
 
-for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+for (const viewport of [{ width: 390, height: 844 }, { width: 1000, height: 800 }]) {
   test(`utility bar: info · four tools · playback at ${viewport.width}×${viewport.height}`, async ({ page }) => {
     mkdirSync(SHOT_DIR, { recursive: true });
     await page.setViewportSize(viewport);
@@ -202,7 +202,7 @@ test('frame off: the picture alone on the stage, and every choice comes back', a
 
 test('4-cut apply switches the frame back on, so the plate is actually printed', async ({ page }) => {
   test.setTimeout(180_000);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -292,7 +292,7 @@ test('video: the playback toggle opens the sheet beside itself, never under it',
 
 test('4-cut slots live in the window only, and survive the trip to a single frame', async ({ page }) => {
   test.setTimeout(180_000);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -336,7 +336,7 @@ test('4-cut slots live in the window only, and survive the trip to a single fram
 
 test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -458,7 +458,7 @@ test('mobile 390×844: the print centres in the stage and only the copy is boost
   await shot(page, 'nordlys_v3_mobile_centred.png');
 
   // The same plate on a desktop: no boost, the frame's own band ratio, centred.
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.waitForTimeout(900);
   const wide = await plateFacts(page);
   const [wideW, wideH] = wide.data.plateSize!.split('x').map(Number);

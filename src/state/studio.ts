@@ -64,6 +64,28 @@ export function initialStudio(): StudioState {
   };
 }
 
+/**
+ * One file's edit session. A workspace keeps one of these per open file, so
+ * walking the strip never folds two photographs into the same grade.
+ */
+export interface StudioSession {
+  filter: FilterSelection;
+  grade: StudioState['grade'];
+  frame: FrameSettings;
+  trim: TrimRange;
+  inputGuard: 0 | 1;
+}
+
+export function sessionOf(state: StudioState): StudioSession {
+  return {
+    filter: state.filter,
+    grade: state.grade,
+    frame: state.frame,
+    trim: state.trim,
+    inputGuard: state.inputGuard,
+  };
+}
+
 export type StudioAction =
   | { type: 'open-photos'; media: MediaInfo[] }
   | { type: 'open-video'; media: MediaInfo }
@@ -88,6 +110,7 @@ export type StudioAction =
   | { type: 'open-modal'; modal: ModalKind }
   | { type: 'set-theme'; theme: 'dark' | 'light' }
   | { type: 'set-input-guard'; guard: 0 | 1 }
+  | { type: 'restore-session'; session: StudioSession }
   | { type: 'reset-grade' };
 
 function withGradeSelection(state: StudioState, filter: FilterSelection): StudioState {
@@ -221,6 +244,18 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
       return { ...state, theme: action.theme };
     case 'set-input-guard':
       return { ...state, inputGuard: action.guard, revision: state.revision + 1 };
+    case 'restore-session':
+      // Everything the visitor changed on this file comes back at once: the
+      // filter and its grade, the frame and its margin, the cut.
+      return {
+        ...state,
+        filter: action.session.filter,
+        grade: action.session.grade,
+        frame: action.session.frame,
+        trim: action.session.trim,
+        inputGuard: action.session.inputGuard,
+        revision: state.revision + 1,
+      };
     case 'reset-grade': {
       const grade = gradeForFilter(state.filter, DEFAULT_CAMERA);
       return {

@@ -65,7 +65,7 @@ async function expectNoOverlap(page: Page, a: string, b: string) {
 test('landing: Nordlys lockup, one open card, the corner cluster and both palettes', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Nordlys/);
@@ -122,7 +122,7 @@ test('landing: Nordlys lockup, one open card, the corner cluster and both palett
 test('landing header: the editor title bar, both portal doors and the ⋮ menu', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
 
   // ── the bar itself: 56px, pinned, and the scroll box starts under it ──
@@ -138,7 +138,7 @@ test('landing header: the editor title bar, both portal doors and the ⋮ menu',
       headerHeight: Math.round(rect.height),
       headerTop: Math.round(rect.top),
       scrollTop: Math.round(scroll.getBoundingClientRect().top),
-      actionsInset: Math.round(1280 - actionsRect.right),
+      actionsInset: Math.round(window.innerWidth - actionsRect.right),
       portalLinks: document.querySelectorAll('.landing-top .portal-link').length,
       menus: header.querySelectorAll('[data-testid="nav-menu-button"]').length,
       badge: (document.querySelector('.landing-top .brand-badge') as HTMLElement).textContent,
@@ -277,10 +277,10 @@ test('mobile 390×844: the landing bar keeps one row, portals fold into ⋮', as
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
 
-test('desktop editor: title-backdrop slide, strip, cluster, and no corner collisions', async ({ page }) => {
+test('wide editor (1000×800): title-backdrop slide, strip, cluster, and no corner collisions', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -375,7 +375,7 @@ test('desktop editor: title-backdrop slide, strip, cluster, and no corner collis
 test('navigation menu: workspace, samples and portal links', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -402,7 +402,7 @@ test('navigation menu: workspace, samples and portal links', async ({ page }) =>
 test('modals: eleven single frames, the 4-cut window, and the three effect sheets', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -506,7 +506,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
 test('export: prepare first, then one save/share tap', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
@@ -532,7 +532,7 @@ test('video: sound toggle, plate legibility and an export that keeps its audio',
   test.setTimeout(240_000);
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
-  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSampleVideo(page);
 
