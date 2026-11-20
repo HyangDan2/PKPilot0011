@@ -35,6 +35,7 @@ export async function loadPhoto(file: File): Promise<LoadedPhoto> {
       height: image.naturalHeight,
       duration: 0,
       fps: 0,
+      hasAudio: false,
       size: file.size,
       meta: meta,
     },
@@ -168,7 +169,11 @@ export async function loadVideo(file: File, options: VideoLoadOptions = {}): Pro
   // Metadata only: the stage streams and decodes live, so a phone no longer
   // has to pull the whole clip in before it can show the first frame.
   video.preload = 'metadata';
-  video.crossOrigin = 'anonymous';
+  // A blob: URL is same-origin by definition. Asking for anonymous CORS on it
+  // makes Android build a request path it does not need — and on some phones
+  // that path is the one that ends up with no audio track at all. Only a
+  // remote source is asked for CORS.
+  if (!url.startsWith('blob:')) video.crossOrigin = 'anonymous';
   video.src = url;
   mountSourceVideo(video);
 
@@ -192,7 +197,7 @@ export async function loadVideo(file: File, options: VideoLoadOptions = {}): Pro
 
   const width = video.videoWidth;
   const height = video.videoHeight;
-  const fps = await probeFrameRate(file, options.probeTimeoutMs);
+  const probe = await probeClip(file, options.probeTimeoutMs);
   return {
     info: {
       kind: 'video',
@@ -201,7 +206,11 @@ export async function loadVideo(file: File, options: VideoLoadOptions = {}): Pro
       width,
       height,
       duration: Number.isFinite(video.duration) ? video.duration : 0,
-      fps,
+      fps: probe.fps,
+      // A clip with no audio track must not offer a sound button that can only
+      // fail. A container we could not read is assumed to have sound: the
+      // element still knows, and the button is better than a hidden one.
+      hasAudio: probe.hasAudio,
       size: file.size,
       meta: {
         ...EMPTY_META,
@@ -217,35 +226,56 @@ export async function loadVideo(file: File, options: VideoLoadOptions = {}): Pro
   };
 }
 
-/** Exact-ish frame rate from the container; falls back to a sane 30. */
-export async function probeFrameRate(file: Blob, timeoutMs = 1500): Promise<number> {
-  const work = (async () => {
+export interface ClipProbe {
+  /** Frames per second as the container reports it (30 when unknown). */
+  fps: number;
+  /** False only when the container positively showed no audio track. */
+  hasAudio: boolean;
+}
+
+/**
+ * Frame rate and sound presence in one pass over the container. A phone clip
+ * that was recorded with sound muted, or a screen recording with no track at
+ * all, used to offer a sound button that could only ever fail.
+ */
+export async function probeClip(file: Blob, timeoutMs = 1500): Promise<ClipProbe> {
+  const work = (async (): Promise<ClipProbe> => {
     try {
       const { Input, ALL_FORMATS, BlobSource } = await import('mediabunny');
       const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
       try {
+        let fps = 30;
         const track = await input.getPrimaryVideoTrack();
-        if (!track) return 30;
-        const metrics = await track.computeFrameRateMetrics({ targetPacketCount: 60 });
-        const rate = metrics.underlyingFrameRate ?? metrics.bestGuessFrameRate ?? metrics.medianFrameRate;
-        return Number.isFinite(rate) && rate > 0 ? Math.min(120, Math.round(rate * 100) / 100) : 30;
+        if (track) {
+          const metrics = await track.computeFrameRateMetrics({ targetPacketCount: 60 });
+          const rate = metrics.underlyingFrameRate ?? metrics.bestGuessFrameRate ?? metrics.medianFrameRate;
+          if (Number.isFinite(rate) && rate > 0) fps = Math.min(120, Math.round(rate * 100) / 100);
+        }
+        const audioTrack = await input.getPrimaryAudioTrack();
+        return { fps, hasAudio: audioTrack !== null };
       } finally {
         input.dispose();
       }
     } catch {
-      return 30;
+      // A container that will not be read is not a container without sound.
+      return { fps: 30, hasAudio: true };
     }
   })();
   // Probing is a nicety: a container that stalls must not hold the stage.
   let timer = 0;
-  const guard = new Promise<number>((resolve) => {
-    timer = window.setTimeout(() => resolve(30), timeoutMs);
+  const guard = new Promise<ClipProbe>((resolve) => {
+    timer = window.setTimeout(() => resolve({ fps: 30, hasAudio: true }), timeoutMs);
   });
   try {
     return await Promise.race([work, guard]);
   } finally {
     window.clearTimeout(timer);
   }
+}
+
+/** Exact-ish frame rate from the container; falls back to a sane 30. */
+export async function probeFrameRate(file: Blob, timeoutMs = 1500): Promise<number> {
+  return (await probeClip(file, timeoutMs)).fps;
 }
 
 export function releaseMedia(info: MediaInfo | null): void {

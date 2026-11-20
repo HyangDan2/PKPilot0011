@@ -120,22 +120,56 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   expect(moving.checksum).not.toBe(idle.checksum);
   await shot(page, 'nordlys_video_fix_playing.png');
 
-  // ── 5. sound: the transport starts the clip with sound, the toggle silences it ──
+  // ── 5. sound: the transport starts the clip with sound, and the analyser
+  //       proves real PCM is flowing — not just that a flag flipped ──
   await expect.poll(async () => page.evaluate(() => {
     const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
     return video ? video.muted : true;
   }), { message: 'transport play should ask for sound' }).toBe(false);
+
+  const liveAudio = await page.evaluate(() => {
+    const video = document.querySelector('video.source-video') as HTMLVideoElement;
+    return {
+      muted: video.muted,
+      volume: video.volume,
+      paused: video.paused,
+      preload: video.preload,
+      audio: window.__nordlysAudio ?? null,
+    };
+  });
+  process.stdout.write(`[sound] ${JSON.stringify(liveAudio)}\n`);
+  expect(liveAudio.volume).toBe(1);
+  expect(liveAudio.paused).toBe(false);
+  expect(liveAudio.preload).toBe('auto');
+  expect(liveAudio.audio?.context).toBe('running');
+  expect(liveAudio.audio?.routed).toBe(true);
+  // The element is routed through MediaElementAudioSourceNode → Gain → Analyser:
+  // a non-zero RMS here is sound leaving the graph, not a UI state.
+  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+    message: 'the analyser should see the sample bed', timeout: 10_000,
+  }).toBeGreaterThan(0.01);
 
   await page.locator('[data-testid="mute-toggle"]').click();
   await expect.poll(async () => page.evaluate(() => {
     const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
     return video ? video.muted : false;
   })).toBe(true);
+  await expect(page.locator('[data-testid="mute-toggle"]')).toHaveText(/소리 켜기/);
+  await expect(page.locator('[data-testid="mute-toggle"]')).toHaveAttribute('aria-label', '소리 켜기');
+  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 1), {
+    message: 'silenced graph', timeout: 10_000,
+  }).toBeLessThan(0.02);
+
   await page.locator('[data-testid="mute-toggle"]').click();
   await expect.poll(async () => page.evaluate(() => {
     const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
     return video ? video.muted : true;
   })).toBe(false);
+  await expect(page.locator('[data-testid="mute-toggle"]')).toHaveText(/소리 켜짐/);
+  await expect(page.locator('[data-testid="mute-toggle"]')).toHaveAttribute('aria-label', '음소거');
+  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+    message: 'the graph should pass sound again', timeout: 10_000,
+  }).toBeGreaterThan(0.01);
 
   // ── 6. the loop starts the next pass instead of freezing on the last frame ──
   // A whole pass plus slack: had the loop not restarted itself, the element
@@ -194,5 +228,192 @@ test('desktop: the ⋮ menu opens above the corner tools', async ({ page }) => {
   expect(hit.inMenu, `the menu is under ${hit.testId ?? hit.tag} there`).toBe(true);
 
   await shot(page, 'nordlys_nav_menu_over_stage.png');
+  expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
+});
+
+/**
+ * A phone turns sound on with one tap on the sound chip. The tap sits inside the
+ * stage, where a long press means "compare with the original" — so the chip has
+ * to answer the tap immediately and never let the stage start its timer.
+ */
+test('mobile 390×844: the sound toggle answers the tap, never the long press', async ({ page }) => {
+  test.setTimeout(180_000);
+  mkdirSync(SHOT_DIR, { recursive: true });
+  const errors = watch(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  await page.locator('.sample-card.video').click();
+  await expect(page.locator('video.source-video')).toHaveCount(1);
+  await expect.poll(async () => page.evaluate(() => {
+    const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
+    return video ? video.readyState : 0;
+  }), { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
+
+  const toggle = page.locator('[data-testid="mute-toggle"]');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('data-has-audio', 'true');
+  await expect(toggle).toHaveText(/소리 켜기/);
+  await expect(toggle).toHaveAttribute('aria-label', '소리 켜기');
+
+  // The chip sits above the print, and a press that rests past the 260ms
+  // compare delay still only flips the sound.
+  const box = (await toggle.boundingBox())!;
+  expect(box.width).toBeGreaterThan(40);
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(420);
+  await expect(page.locator('.compare-badge')).toHaveCount(0);
+  await page.mouse.up();
+
+  await expect(toggle).toHaveText(/소리 켜짐/, { timeout: 10_000 });
+  await expect(toggle).toHaveAttribute('aria-label', '음소거');
+  await expect(page.locator('.compare-badge')).toHaveCount(0);
+
+  const live = await page.evaluate(() => {
+    const video = document.querySelector('video.source-video') as HTMLVideoElement;
+    const button = document.querySelector('[data-testid="mute-toggle"]') as HTMLElement;
+    return {
+      muted: video.muted,
+      volume: video.volume,
+      paused: video.paused,
+      preload: video.preload,
+      top: Math.round(button.getBoundingClientRect().top),
+      audio: window.__nordlysAudio ?? null,
+    };
+  });
+  process.stdout.write(`[mobile sound] ${JSON.stringify(live)}\n`);
+  expect(live.muted).toBe(false);
+  expect(live.volume).toBe(1);
+  expect(live.paused).toBe(false);
+  expect(live.preload).toBe('auto');
+  expect(live.audio?.context).toBe('running');
+  expect(live.audio?.routed).toBe(true);
+  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+    message: 'the phone tap should put real PCM through the graph', timeout: 10_000,
+  }).toBeGreaterThan(0.01);
+
+  // The phone's header is one clean row: the lockup, then the backdrop slide,
+  // the replace door and the menu — nothing wraps, nothing overflows.
+  const header = await page.evaluate(() => {
+    const topbar = document.querySelector('.topbar') as HTMLElement;
+    const brand = document.querySelector('.topbar .brand') as HTMLElement;
+    const backdrop = document.querySelector('[data-testid="backdrop-switch"]') as HTMLElement;
+    const replace = document.querySelector('[data-testid="replace-button"]') as HTMLElement;
+    const menu = document.querySelector('[data-testid="nav-menu-button"]') as HTMLElement;
+    const rect = (element: HTMLElement) => element.getBoundingClientRect();
+    return {
+      overflow: topbar.scrollWidth - topbar.clientWidth,
+      brandRight: Math.round(rect(brand).right),
+      backdropLeft: Math.round(rect(backdrop).left),
+      order: [rect(backdrop).left, rect(replace).left, rect(menu).left].map(Math.round),
+      bottoms: [rect(brand).bottom, rect(backdrop).bottom, rect(replace).bottom, rect(menu).bottom]
+        .map((value) => Math.round(value)),
+      topbarBottom: Math.round(rect(topbar).bottom),
+      wordmark: getComputedStyle(document.querySelector('.topbar .brand-name') as HTMLElement).fontSize,
+      mark: (() => {
+        const mark = document.querySelector('.topbar .mark') as HTMLElement;
+        const style = getComputedStyle(mark);
+        return { width: style.width, height: style.height, border: style.borderTopWidth, skew: style.transform };
+      })(),
+    };
+  });
+  process.stdout.write(`[mobile header] ${JSON.stringify(header)}\n`);
+  expect(header.overflow).toBeLessThanOrEqual(0);
+  expect(header.brandRight).toBeLessThan(header.backdropLeft);
+  expect(header.order[0]).toBeLessThan(header.order[1]);
+  expect(header.order[1]).toBeLessThan(header.order[2]);
+  for (const bottom of header.bottoms) expect(bottom).toBeLessThanOrEqual(header.topbarBottom + 1);
+  expect(header.wordmark).toBe('22px');
+  expect(header.mark.width).toBe('17px');
+  expect(header.mark.height).toBe('22px');
+  expect(header.mark.border).toBe('3px');
+  // skewY(-23deg) computes to matrix(1, -0.4245, 0, 1, 0, 0).
+  const headerSkew = Number((header.mark.skew.match(/matrix\(([^)]+)\)/) || ['', ''])[1].split(',')[1]);
+  expect(Math.atan(headerSkew) * 180 / Math.PI).toBeCloseTo(-23, 1);
+
+  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_audio_fix_mobile.png') });
+  expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
+});
+
+/**
+ * The tone curve is an overlay on the print, not a sheet over it: on a phone the
+ * graph has to fit inside the stage, stay transparent, and take a drag without
+ * the stage stealing the gesture.
+ */
+test('mobile 390×844: the tone curve floats over the print', async ({ page }) => {
+  test.setTimeout(180_000);
+  mkdirSync(SHOT_DIR, { recursive: true });
+  const errors = watch(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.locator('.sample-card.photo').first().click();
+  await expect(page.locator('[data-testid="plate-canvas"]')).toBeVisible();
+  await page.waitForTimeout(900);
+
+  await page.locator('[data-testid="tonecurve-fab"]').click();
+  const overlay = page.locator('[data-testid="tonecurve-overlay"]');
+  await expect(overlay).toBeVisible();
+  await expect(page.locator('[data-testid="tonecurve-fab"]')).toHaveAttribute('aria-expanded', 'true');
+
+  const placement = await page.evaluate(() => {
+    const element = document.querySelector('[data-testid="tonecurve-overlay"]') as HTMLElement;
+    const wrap = document.querySelector('.stage-wrap') as HTMLElement;
+    const plate = document.querySelector('[data-testid="plate-canvas"]') as HTMLElement;
+    const rect = element.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const plateRect = plate.getBoundingClientRect();
+    return {
+      inside: wrap.contains(element),
+      background: getComputedStyle(element).backgroundColor,
+      graphBackground: getComputedStyle(element.querySelector('svg') as SVGElement).backgroundColor,
+      width: Math.round(rect.width),
+      fits: rect.top >= wrapRect.top - 1 && rect.bottom <= wrapRect.bottom + 1
+        && rect.left >= wrapRect.left - 1 && rect.right <= wrapRect.right + 1,
+      centreDx: (rect.left + rect.width / 2) - (wrapRect.left + wrapRect.width / 2),
+      centreDy: (rect.top + rect.height / 2) - (wrapRect.top + wrapRect.height / 2),
+      plateWider: plateRect.width > rect.width + 20,
+    };
+  });
+  process.stdout.write(`[mobile curve] ${JSON.stringify(placement)}\n`);
+  expect(placement.inside).toBe(true);
+  expect(placement.background).toBe('rgba(0, 0, 0, 0)');
+  expect(placement.graphBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(placement.fits).toBe(true);
+  expect(Math.abs(placement.centreDx)).toBeLessThanOrEqual(1);
+  expect(Math.abs(placement.centreDy)).toBeLessThanOrEqual(1);
+  expect(placement.width).toBeLessThanOrEqual(240);
+  expect(placement.plateWider).toBe(true);
+
+  // Add a point on the graph and drag it up: the curve follows, the stage does
+  // not draw its compare badge, and the fab picks up the touched dot.
+  const graph = page.locator('[data-testid="tonecurve-graph"]');
+  const box = (await graph.boundingBox())!;
+  const line = page.locator('[data-testid="tonecurve-line"]');
+  const before = await line.getAttribute('d');
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.6);
+  const afterAdd = await line.getAttribute('d');
+  expect(afterAdd).not.toBe(before);
+  expect(await line.getAttribute('d')).not.toBe(before);
+
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.6);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.32, { steps: 10 });
+  await page.mouse.up();
+  const afterDrag = await line.getAttribute('d');
+  expect(afterDrag).not.toBe(afterAdd);
+  await expect(page.locator('.compare-badge')).toHaveCount(0);
+  await expect(page.locator('[data-testid="tonecurve-fab"] .dot-active')).toHaveCount(1);
+
+  // The channel chips and the numbers reach the same curve.
+  await page.locator('[data-testid="tonecurve-overlay"] [data-channel="red"]').click();
+  await expect(page.locator('.tonecurve-title')).toHaveText(/RGB|R/);
+  await expect(page.locator('[data-testid="tonecurve-overlay"] [data-channel="red"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_tonecurve_overlay_mobile.png') });
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="tonecurve-overlay"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="tonecurve-fab"]')).toHaveAttribute('aria-expanded', 'false');
   expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
 });

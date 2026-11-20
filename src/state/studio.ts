@@ -12,7 +12,8 @@ import {
 } from '../types/studio';
 import { DEFAULT_FILTER, gradeForFilter } from '../filters/catalog';
 
-export type ModalKind = 'filter' | 'frame' | 'fourcut' | 'colorlab' | 'tonecurve' | 'camera' | 'adjust' | 'export' | null;
+/** Sheets. Tone Curve is not one of them: it is an overlay on the stage. */
+export type ModalKind = 'filter' | 'frame' | 'fourcut' | 'colorlab' | 'camera' | 'adjust' | 'export' | null;
 
 export interface StudioState {
   media: MediaInfo[];

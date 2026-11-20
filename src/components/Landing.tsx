@@ -64,10 +64,11 @@ export function Landing(props: LandingProps) {
     <div className="landing">
       <div className="landing-scroll">
         <header className="landing-top">
-          <HD2LabMark size={26} />
-          <span className="brand-word">HD2Lab</span>
-          <span className="brand-div">|</span>
-          <span className="brand-sub">Nordlys</span>
+          <div className="brand">
+            <span className="mark" aria-hidden />
+            <span className="brand-name">HD2Lab</span>
+            <em>Nordlys</em>
+          </div>
           <span className="brand-badge">STUDIO</span>
         </header>
 

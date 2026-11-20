@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Landing, SAMPLES, HD2LabMark, type SampleItem } from './components/Landing';
+import { Landing, SAMPLES, type SampleItem } from './components/Landing';
 import { Stage, useLongPress, type MediaBank } from './components/Stage';
 import { Timeline } from './components/Timeline';
 import { FilterModal } from './components/FilterModal';
@@ -10,7 +10,7 @@ import { ExportModal } from './components/ExportModal';
 import { NavMenu } from './components/NavMenu';
 import { FilterStrip, STRIP_FILTERS } from './components/FilterStrip';
 import { ColorLabModal } from './components/ColorLabModal';
-import { ToneCurveModal, curvesTouched } from './components/ToneCurveModal';
+import { ToneCurveOverlay, curvesTouched } from './components/ToneCurveOverlay';
 import { CameraEffectsModal } from './components/CameraEffectsModal';
 import { BackdropSwitch, ThemeFab } from './components/ThemeControls';
 import {
@@ -19,6 +19,7 @@ import {
 import { initialStudio, studioReducer } from './state/studio';
 import { loadPlateEngine, type SPEmblemsApi, type SPPlateApi } from './plate/engine';
 import { loadPhoto, loadVideo, releaseMedia } from './media/load';
+import { closeAudioPath, openAudioPath, rebindAudioTrack, releaseAudio } from './media/audio';
 import { routeFiles } from './media/route';
 import { withSpecFallback } from './media/spec';import { buildFrameThumbs, buildFilterThumbs, type Cancellation } from './studio/thumbnails';
 import { PhotoGrader, thumbnailSource } from './studio/grading';
@@ -49,6 +50,8 @@ export default function App() {
   const [metaOverride, setMetaOverride] = useState<Partial<PlateMeta>>({});
   const [muted, setMuted] = useState(true);
   const [playbackOpen, setPlaybackOpen] = useState(false);
+  /** Tone Curve is an overlay on the stage, not a sheet: it lives over the print. */
+  const [toneCurveOpen, setToneCurveOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const bank = useRef<MediaBank>({ photos: new Map(), video: null });
   const fileRef = useRef<File | null>(null);
@@ -129,6 +132,7 @@ export default function App() {
   const clearMedia = useCallback(() => {
     state.media.forEach(releaseMedia);
     if (bank.current.video) {
+      releaseAudio(bank.current.video);
       bank.current.video.pause();
       bank.current.video.remove();
       bank.current.video = null;
@@ -422,49 +426,57 @@ export default function App() {
   }, [engine, activeMedia, state.frame, composedMeta, state.grade, state.trim, state.inputGuard]);
 
   /* ── playback & sound ───────────────────────────────────────────────────── */
+  /**
+   * Sound is turned on inside the visitor's own tap, never a render later:
+   * the element is unmuted at full volume, the audio context is resumed and the
+   * element routed through it, and a clip that was already running silently has
+   * its audio track rebound on the same frame (the Android requirement).
+   */
+  const soundOn = useCallback(async (video: HTMLVideoElement, startIfPaused: boolean) => {
+    const wasPlaying = !video.paused;
+    try {
+      await openAudioPath(video);
+      if (startIfPaused && !wasPlaying) await video.play();
+      else if (wasPlaying) await rebindAudioTrack(video);
+      setMuted(false);
+    } catch {
+      // The browser refused sound with playback. Go silent instead of leaving
+      // the clip frozen, and say so once.
+      closeAudioPath(video);
+      setMuted(true);
+      setNotice('브라우저가 소리 있는 재생을 막아 음소거로 재생합니다.');
+      void video.play().catch(() => undefined);
+    }
+  }, []);
+
   const togglePlay = useCallback(() => {
     const video = bank.current.video;
     const next = !state.playing;
     if (video && next) {
-      if (!muted) {
-        void video.play().catch(() => undefined);
-      } else {
-        // Unmute the element before asking it to play: a setMuted() state
-        // update only lands on the next render, which is too late for a call
-        // the browser counts against the visitor's tap.
-        video.muted = false;
-        setMuted(false);
-        void video.play().catch(() => {
-          // The browser refused sound. Go silent instead of leaving the clip
-          // frozen, and say so once.
-          video.muted = true;
-          setMuted(true);
-          setNotice('브라우저가 소리 있는 재생을 막아 음소거로 재생합니다.');
-          void video.play().catch(() => undefined);
-        });
-      }
+      if (!muted) void video.play().catch(() => undefined);
+      else void soundOn(video, true);
     }
     dispatch({ type: 'set-playing', playing: next });
-  }, [state.playing, muted]);
+  }, [state.playing, muted, soundOn]);
 
   const toggleMute = useCallback(() => {
     const video = bank.current.video;
     if (!video) return;
+    // A clip without an audio track offers no sound button to press.
+    if (activeMedia?.hasAudio === false) return;
     if (muted) {
-      video.muted = false;
-      setMuted(false);
-      void video.play().catch(() => {
-        video.muted = true;
-        setMuted(true);
-        setNotice('브라우저가 소리 있는 재생을 막아 음소거로 재생합니다.');
-        void video.play().catch(() => undefined);
-      });
       if (!state.playing) dispatch({ type: 'set-playing', playing: true });
+      void soundOn(video, true);
     } else {
+      closeAudioPath(video);
       setMuted(true);
-      video.muted = true;
     }
-  }, [muted, state.playing]);
+  }, [muted, state.playing, soundOn, activeMedia]);
+
+  /* ── the curve overlay yields to a sheet, and to leaving the editor ─────── */
+  useEffect(() => {
+    if (state.modal || view !== 'editor') setToneCurveOpen(false);
+  }, [state.modal, view]);
 
   /* ── keyboard ───────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -556,9 +568,15 @@ export default function App() {
       </button>
       <button
         type="button"
-        className={`tool-fab${curvesActive ? ' on' : ''}`}
-        onClick={() => dispatch({ type: 'open-modal', modal: 'tonecurve' })}
+        className={`tool-fab${curvesActive || toneCurveOpen ? ' on' : ''}`}
+        onClick={() => {
+          // The curve floats over the stage; any sheet that opens takes its
+          // place, and a second press on the disc closes it.
+          setToneCurveOpen((open) => !open);
+        }}
         aria-label="Tone Curve"
+        aria-expanded={toneCurveOpen}
+        aria-controls="tone-curve-overlay"
         title="Tone Curve"
         data-testid="tonecurve-fab"
         data-tool="tonecurve"
@@ -690,21 +708,26 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <button type="button" className="brand-btn" onClick={() => setView('landing')} aria-label="홈으로">
-          <HD2LabMark size={22} />
-          <span className="brand-word">HD2Lab</span>
-          <span className="brand-div">|</span>
-          <span className="brand-sub strong">Nordlys</span>
+        {/* The Web-HQ lockup every HD2Lab title carries: [mark] HD2Lab | Nordlys. */}
+        <button
+          type="button"
+          className="brand"
+          onClick={() => setView('landing')}
+          aria-label="Nordlys 홈으로 이동"
+          title="Nordlys 홈 — 랜딩 화면"
+        >
+          <span className="mark" aria-hidden />
+          <span className="brand-name">HD2Lab</span>
+          <em>Nordlys</em>
         </button>
-
-        <BackdropSwitch
-          backdrop={state.frame.backdrop}
-          onChange={(backdrop) => dispatch({ type: 'set-frame', patch: { backdrop } })}
-        />
 
         <div className="topbar-actions">
           <button type="button" className="chip on desktop-only" onClick={openFilterModal}>{filterLabel}</button>
           <button type="button" className="chip desktop-only" onClick={openFrameModal}>{frameLabel}</button>
+          <BackdropSwitch
+            backdrop={state.frame.backdrop}
+            onChange={(backdrop) => dispatch({ type: 'set-frame', patch: { backdrop } })}
+          />
           <button
             type="button"
             className="chip swap-btn"
@@ -751,6 +774,13 @@ export default function App() {
             onDuration={onDuration}
             onTogglePlay={togglePlay}
           />
+          {toneCurveOpen && (
+            <ToneCurveOverlay
+              curves={state.grade.curves}
+              onCurves={(curves) => dispatch({ type: 'set-curves', curves })}
+              onClose={() => setToneCurveOpen(false)}
+            />
+          )}
           {showOriginal && <span className="compare-badge">원본</span>}
           {floatingCluster(true)}
         </div>
@@ -868,13 +898,6 @@ export default function App() {
         <ColorLabModal
           mixer={state.grade.colorMixer}
           onMixer={(mixer) => dispatch({ type: 'patch-mixer', mixer })}
-          onClose={closeModal}
-        />
-      )}
-      {state.modal === 'tonecurve' && (
-        <ToneCurveModal
-          curves={state.grade.curves}
-          onCurves={(curves) => dispatch({ type: 'set-curves', curves })}
           onClose={closeModal}
         />
       )}

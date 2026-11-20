@@ -67,6 +67,11 @@ export interface MediaInfo {
   duration: number;
   /** Frames per second as reported by the decoder, video only. */
   fps: number;
+  /**
+   * Whether the clip genuinely carries an audio track. Photos are always
+   * false; a clip whose container could not be probed is assumed audible.
+   */
+  hasAudio?: boolean;
   size: number;
   meta: PlateMeta;
 }

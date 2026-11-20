@@ -185,6 +185,12 @@ export async function exportVideo(job: VideoExportJob): Promise<VideoExportResul
         { startTimestamp: 0 },
       );
       out.addAudioTrack(audioSource);
+      // AAC is what every gallery app plays. Opus in MP4 is a legal fallback and
+      // Chrome plays it, but an Android gallery may show a silent clip — say so
+      // instead of letting the visitor find out later.
+      if (plan.container === 'mp4' && plan.audio === 'opus') {
+        note = '이 브라우저는 MP4 Opus 오디오로 저장됩니다 (일부 기본 갤러리 앱에선 Chrome/VLC 재생 권장).';
+      }
     } else if (job.includeAudio && !plan.audio) {
       note = '이 브라우저에는 쓸 수 있는 오디오 인코더가 없어 소리 없이 저장합니다.';
     } else if (job.includeAudio && !audioTrack) {

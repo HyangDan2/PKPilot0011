@@ -3,6 +3,7 @@ import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
 import { buildPlateLayout, stageTypeBoost, virtualPhotoBox } from '../studio/render';
 import { PhotoGrader } from '../studio/grading';
 import { IconVolume, IconVolumeOff } from './Icons';
+import { applyMuted } from '../media/audio';
 import type { FrameSettings, GradeSettings, MediaInfo, PlateMeta, TrimRange } from '../types/studio';
 import { PLATE_BASE_EDGE, PREVIEW_MAX_EDGE, isMultiFrame } from '../types/studio';
 
@@ -478,8 +479,9 @@ export function Stage(props: StageProps) {
   /* ── audio: the element follows the mute toggle ─────────────────────────── */
   useEffect(() => {
     if (!video) return;
-    video.muted = muted;
-    video.volume = 1;
+    // The element is muted and the graph's gain is closed together: whichever
+    // path the sound leaves by, the toggle means the same thing.
+    applyMuted(video, muted);
   }, [video, muted]);
 
   /* ── play/pause ─────────────────────────────────────────────────────────── */
@@ -555,18 +557,34 @@ export function Stage(props: StageProps) {
 
       {activeMedia?.kind === 'video' && (
         <>
-          <button
-            type="button"
-            className={`mute-btn${muted ? ' is-muted' : ''}`}
-            aria-label={muted ? '소리 켜기' : '음소거'}
-            aria-pressed={!muted}
-            title={muted ? '소리 켜기' : '음소거'}
-            onClick={onToggleMute}
-            data-testid="mute-toggle"
-          >
-            {muted ? <IconVolumeOff size={16} /> : <IconVolume size={16} />}
-            <span>{muted ? '음소거' : '소리 켜짐'}</span>
-          </button>
+          {activeMedia.hasAudio === false ? (
+            <button
+              type="button"
+              className="mute-btn is-silent"
+              aria-label="오디오 없음"
+              title="이 영상에는 오디오 트랙이 없습니다"
+              data-testid="mute-toggle"
+              data-has-audio="false"
+              disabled
+            >
+              <IconVolumeOff size={16} />
+              <span>오디오 없음</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`mute-btn${muted ? ' is-muted' : ''}`}
+              aria-label={muted ? '소리 켜기' : '음소거'}
+              aria-pressed={!muted}
+              title={muted ? '소리 켜기' : '음소거'}
+              onClick={onToggleMute}
+              data-testid="mute-toggle"
+              data-has-audio="true"
+            >
+              {muted ? <IconVolumeOff size={16} /> : <IconVolume size={16} />}
+              <span>{muted ? '소리 켜기' : '소리 켜짐'}</span>
+            </button>
+          )}
           <div className="stage-hint">길게 눌러 원본 비교 · 더블클릭으로 재생/일시정지</div>
         </>
       )}
@@ -583,6 +601,11 @@ export function useLongPress(onChange: (pressed: boolean) => void, delay = 260) 
   }, [onChange]);
   const start = useCallback((event: React.PointerEvent) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    // A press that lands on a control belongs to that control: the sound
+    // toggle, the curve overlay and the sliders must never also start the
+    // long-press compare, or a tap on them flashes the ungraded frame.
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button, a, input, select, textarea, [role="slider"], [data-testid="tonecurve-overlay"]')) return;
     timer.current = window.setTimeout(() => onChange(true), delay);
   }, [onChange, delay]);
   const end = useCallback(() => fire(false), [fire]);

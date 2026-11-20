@@ -69,12 +69,28 @@ test('landing: Nordlys lockup, one open card, the corner cluster and both palett
   await page.goto('/');
 
   await expect(page).toHaveTitle(/Nordlys/);
-  await expect(page.locator('.landing-top .brand-word')).toHaveText('HD2Lab');
-  await expect(page.locator('.landing-top .brand-sub')).toHaveText('Nordlys');
-  // The HD2Lab mark is two hollow parallelograms, never a filled block.
-  const mark = page.locator('.landing-top .brand-mark svg path');
-  await expect(mark).toHaveAttribute('fill', 'none');
-  await expect(mark).toHaveAttribute('stroke-width', '4.2');
+  // The landing carries the same Web-HQ lockup as the editor: CSS dual-skew
+  // mark, wordmark, and the product name behind a rule.
+  await expect(page.locator('.landing-top .brand-name')).toHaveText('HD2Lab');
+  await expect(page.locator('.landing-top .brand em')).toHaveText('Nordlys');
+  await expect(page.locator('.landing-top .brand-badge')).toHaveText('STUDIO');
+  const landingLockup = await page.evaluate(() => {
+    const mark = document.querySelector('.landing-top .mark') as HTMLElement;
+    const style = getComputedStyle(mark);
+    return {
+      width: style.width, height: style.height, border: style.borderTopWidth,
+      skew: (() => { const m = style.transform.match(/matrix\(([^)]+)\)/); return m ? Math.atan(Number(m[1].split(',')[1])) * 180 / Math.PI : null; })(),
+      svg: document.querySelector('.landing-top .mark svg') !== null,
+      name: getComputedStyle(document.querySelector('.landing-top .brand-name') as HTMLElement).fontSize,
+    };
+  });
+  process.stdout.write(`[landing lockup] ${JSON.stringify(landingLockup)}\n`);
+  expect(landingLockup.width).toBe('17px');
+  expect(landingLockup.height).toBe('22px');
+  expect(landingLockup.border).toBe('3px');
+  expect(landingLockup.skew).toBeCloseTo(-23, 1);
+  expect(landingLockup.svg).toBe(false);
+  expect(landingLockup.name).toBe('25px');
 
   // One card opens both kinds of file.
   await expect(page.locator('[data-testid="open-any"]')).toHaveCount(1);
@@ -110,12 +126,50 @@ test('desktop editor: title-backdrop slide, strip, cluster, and no corner collis
   await page.goto('/');
   await openSamplePhoto(page);
 
-  await expect(page.locator('.topbar .brand-word')).toHaveText('HD2Lab');
-  await expect(page.locator('.topbar .brand-sub')).toHaveText('Nordlys');
+  // The Shutterplate lockup: a CSS dual-skew mark, the wordmark, and the
+  // product name behind a rule — never a typed "|" character.
+  await expect(page.locator('.topbar .brand-name')).toHaveText('HD2Lab');
+  await expect(page.locator('.topbar .brand em')).toHaveText('Nordlys');
+  const lockup = await page.evaluate(() => {
+    const mark = document.querySelector('.topbar .mark') as HTMLElement;
+    const name = document.querySelector('.topbar .brand-name') as HTMLElement;
+    const em = document.querySelector('.topbar .brand em') as HTMLElement;
+    const style = getComputedStyle(mark);
+    return {
+      mark: {
+        width: style.width, height: style.height, border: style.borderTopWidth,
+        // skewY(-23deg) computes to a matrix whose b component is tan(-23°).
+        skew: (() => { const m = style.transform.match(/matrix\(([^)]+)\)/); return m ? Math.atan(Number(m[1].split(',')[1])) * 180 / Math.PI : null; })(),
+      },
+      name: { size: getComputedStyle(name).fontSize, weight: getComputedStyle(name).fontWeight },
+      em: { style: getComputedStyle(em).fontStyle, border: getComputedStyle(em).borderLeftWidth },
+      pipe: document.querySelector('.topbar .brand-div') !== null,
+    };
+  });
+  process.stdout.write(`[lockup] ${JSON.stringify(lockup)}\n`);
+  expect(lockup.mark.width).toBe('17px');
+  expect(lockup.mark.height).toBe('22px');
+  expect(lockup.mark.border).toBe('3px');
+  expect(lockup.mark.skew).toBeCloseTo(-23, 1);
+  expect(lockup.name.size).toBe('25px');
+  expect(lockup.em.style).toBe('normal');
+  expect(lockup.em.border).toBe('1px');
+  expect(lockup.pipe).toBe(false);
 
   // Title slide = the viewport behind the plate (frame.backdrop), not the app theme.
   const theme = await page.evaluate(() => document.documentElement.dataset.theme);
   await expect(page.locator('.stage')).toHaveClass(/backdrop-dark/);
+  // The slide sits in the actions row, immediately left of 교체.
+  const order = await page.evaluate(() => {
+    const left = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().left;
+    return {
+      backdrop: left('[data-testid="backdrop-switch"]'),
+      replace: left('[data-testid="replace-button"]'),
+      menu: left('[data-testid="nav-menu-button"]'),
+    };
+  });
+  expect(order.backdrop).toBeLessThan(order.replace);
+  expect(order.replace).toBeLessThan(order.menu);
   await page.locator('[data-testid="backdrop-switch"]').click();
   await expect(page.locator('.stage')).toHaveClass(/backdrop-light/);
   expect(await page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
@@ -155,6 +209,7 @@ test('desktop editor: title-backdrop slide, strip, cluster, and no corner collis
   // Clicking a card scrolls the strip; a screenshot should show it from its start.
   await resetStrip(page);
   await shot(page, 'nordlys_desktop.png');
+  await shot(page, 'nordlys_desktop_v5.png');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
@@ -236,10 +291,40 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await page.keyboard.press('Escape');
 
   await page.locator('[data-testid="tonecurve-fab"]').click();
-  await expect(page.locator('[data-testid="tonecurve-modal"]')).toBeVisible();
-  await expect(page.locator('[data-testid="tonecurve-modal"] canvas')).toBeVisible();
-  await shotSheet(page, 'nordlys_tonecurve_modal.png');
+  const curve = page.locator('[data-testid="tonecurve-overlay"]');
+  await expect(curve).toBeVisible();
+  await expect(page.locator('[data-testid="tonecurve-graph"]')).toBeVisible();
+  // It is not a sheet: the overlay lives inside the stage, transparent, centred
+  // on the print, so the graded picture shows through the graph.
+  const curveBox = await page.evaluate(() => {
+    const overlay = document.querySelector('[data-testid="tonecurve-overlay"]') as HTMLElement | null;
+    const wrap = document.querySelector('.stage-wrap') as HTMLElement | null;
+    if (!overlay || !wrap) return null;
+    const rect = overlay.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    return {
+      inside: wrap.contains(overlay),
+      background: getComputedStyle(overlay).backgroundColor,
+      graphBackground: getComputedStyle(overlay.querySelector('svg') as SVGElement).backgroundColor,
+      centreDx: (rect.left + rect.width / 2) - (wrapRect.left + wrapRect.width / 2),
+      centreDy: (rect.top + rect.height / 2) - (wrapRect.top + wrapRect.height / 2),
+      fits: rect.top >= wrapRect.top - 1 && rect.bottom <= wrapRect.bottom + 1
+        && rect.left >= wrapRect.left - 1 && rect.right <= wrapRect.right + 1,
+      expanded: document.querySelector('[data-testid="tonecurve-fab"]')?.getAttribute('aria-expanded'),
+    };
+  });
+  process.stdout.write(`[curve] ${JSON.stringify(curveBox)}\n`);
+  expect(curveBox!.inside).toBe(true);
+  expect(curveBox!.background).toBe('rgba(0, 0, 0, 0)');
+  expect(curveBox!.graphBackground).toBe('rgba(0, 0, 0, 0)');
+  expect(Math.abs(curveBox!.centreDx)).toBeLessThanOrEqual(1);
+  expect(Math.abs(curveBox!.centreDy)).toBeLessThanOrEqual(1);
+  expect(curveBox!.fits).toBe(true);
+  expect(curveBox!.expanded).toBe('true');
+  await shotSheet(page, 'nordlys_tonecurve_overlay.png');
   await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="tonecurve-overlay"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="tonecurve-fab"]')).toHaveAttribute('aria-expanded', 'false');
 
   await page.locator('[data-testid="cameraeffects-fab"]').click();
   await expect(page.locator('[data-testid="cameraeffects-modal"]')).toBeVisible();
@@ -295,12 +380,17 @@ test('video: sound toggle, plate legibility and an export that keeps its audio',
   // The clip autoplays silent; the toggle is the visitor's way to the sound.
   const mute = page.locator('[data-testid="mute-toggle"]');
   await expect(mute).toBeVisible();
-  await expect(mute).toContainText('음소거');
+  await expect(mute).toHaveText(/소리 켜기/);
+  await expect(mute).toHaveAttribute('aria-label', '소리 켜기');
   await mute.click();
+  await expect(mute).toHaveText(/소리 켜짐/);
   await expect.poll(async () => page.evaluate(() => {
     const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
     return video ? video.muted : true;
   })).toBe(false);
+  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+    message: 'the toggle should put real PCM through the graph', timeout: 10_000,
+  }).toBeGreaterThan(0.01);
   await page.waitForTimeout(700);
   await resetStrip(page);
   await shot(page, 'nordlys_video.png');
@@ -347,7 +437,9 @@ test('video: sound toggle, plate legibility and an export that keeps its audio',
     }
   }, bytes.toString('base64'));
   process.stdout.write(`[export audio] ${JSON.stringify(peak)}\n`);
-  expect(peak.peak, `audio peak in ${name}`).toBeGreaterThan(0.005);
+  // The sample bed is a real pad now (peak ≈ 0.66). A 1% tone used to pass
+  // this at 0.005 while a phone heard nothing at all.
+  expect(peak.peak, `audio peak in ${name}`).toBeGreaterThan(0.2);
   expect(peak.seconds).toBeGreaterThan(5);
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);

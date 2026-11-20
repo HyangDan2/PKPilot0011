@@ -36,7 +36,14 @@
 - **사진** JPEG · PNG · WebP, 최대 4장(4컷 플레이트용 다중 선택), EXIF 자동 파싱
 - **영상** MP4 · MOV · WebM, 재생·스크럽·트림, FPS·길이 자동 감지, **소리 켜기 토글**
 - 샘플: `sample-01.jpg`(풍경) · `sample-02.jpg`(카페 인물) · `sample-clip.mp4`
-  (6.2초 · 1280×720 · 30fps · H.264/AAC — `tools/make-sample-clip.mjs`로 재생성 가능)
+  (6.2초 · 1280×720 · 30fps · H.264/AAC · 피크 0.66 / RMS −15 dBFS — 스마트폰 스피커에서
+  또렷하게 들리는 앰비언트 패드). 그림은 `tools/make-sample-clip.mjs`, 소리는
+  `tools/remake-sample-audio.mjs`가 다시 만듭니다.
+- **소리 경로 (Android Chrome)** — 음소거 자동재생으로 시작한 클립은 `video.muted = false`만으로는
+  소리가 나지 않습니다. 그래서 [소리 켜기] 탭 안에서 `preload='auto'` → `AudioContext.resume()` →
+  `MediaElementAudioSourceNode → GainNode → AnalyserNode` 라우팅 → 같은 프레임에서 pause/play
+  재바인딩을 차례로 수행합니다(`src/media/audio.ts`). 오디오 트랙이 없는 영상은 버튼이
+  `오디오 없음`(비활성)으로 표시되고, 분석기 RMS는 `window.__nordlysAudio`로 노출됩니다.
 
 ### 13 프레임
 
@@ -59,7 +66,11 @@
   카테고리 칩(HD2Lab / Margarine 여섯 갈래), 필터 강도 슬라이더, 누르면 즉시 적용.
 - **프레임 모달**(단일 11종) · **4컷 창** · **세부 보정**(빛 · 색 · 질감 · 영상) ·
   **Color Lab**(8대역 HSL · Color Focus · RGB Base) · **Tone Curve**(W/R/G/B 스플라인) ·
-  **Camera Effects**(날짜 각인 · 광학 효과) — 뒤 세 창은 우측 하단 아이콘 버튼으로 엽니다.
+  **Camera Effects**(날짜 각인 · 광학 효과) — 뒤 세 도구 중 Color Lab·Camera Effects는 창으로,
+  **Tone Curve는 스테이지 위 투명 오버레이**로 뜹니다(그래프 뒤로 그레이딩된 판면이 그대로 비침).
+- **타이틀 락업** — Shutterplate(Web-HQ) 규약 그대로 `[듀얼 스큐 CSS 마크] HD2Lab | Nordlys`.
+  에디터 상단바와 랜딩 상단이 같은 규격(마크 17×22 · 테두리 3px · `skewY(-23deg)`, 워드마크 25px/800).
+  배경 라이트/다크 슬라이드는 상단바 우측 `교체` 바로 왼쪽에 있습니다.
 - **⋮ 내비게이션 메뉴** — WORKSPACE(홈 · 교체 · EXIF 되돌리기 · 비우기 · 엠블럼 색상),
   SAMPLES(4종), NAVIGATION(HD2Lab Web-HQ · ApplicationHub).
 
@@ -90,7 +101,9 @@ npm run dev        # http://localhost:5173/PKPilot0011/
 npm test           # Vitest 55개 (색보정·LUT·필터·플레이트 레이아웃·트림/코덱·리듀서)
 npm run build      # tsc --noEmit && vite build
 npm run preview    # http://localhost:4173/PKPilot0011/
-npm run test:e2e   # Playwright: 데스크톱/모바일 흐름 + 스크린샷 4장
+npm run test:e2e   # Playwright: 데스크톱/모바일 흐름 + 스크린샷
+npm run make-sample-audio   # sample-clip.mp4의 소리만 다시 만들어 교체(그림은 패킷 복사로 유지)
+npm run check-sample-clip   # 샘플의 실제 오디오 피크/RMS와 그림 규격을 측정
 ```
 
 - Node 20+ / 최신 Chromium·Safari·Firefox. WebGL2 필수, 영상 내보내기는 WebCodecs 권장.
@@ -116,7 +129,9 @@ public/
   luts/                   FS-001~010 + identity .cube
   samples/                샘플 사진 3장 + sample-clip.mp4
 tests/                    Vitest 단위 테스트 + Playwright E2E
-tools/make-sample-clip.mjs
+tools/make-sample-clip.mjs      샘플 클립 생성(ffmpeg 필요)
+tools/remake-sample-audio.mjs   샘플 클립의 소리만 교체(mediabunny + AAC 인코더, ffmpeg 불필요)
+tools/check-sample-clip.mjs     샘플의 오디오 피크·RMS·그림 규격 실측
 ```
 
 ### 자산 이식 원칙
@@ -139,7 +154,10 @@ tools/make-sample-clip.mjs
 - `tests/e2e/studio.spec.ts` — 1280×800 / 390×844에서 랜딩 · 에디터 · 필름 스트립 · ⋮ 메뉴 ·
   11종 프레임 창 · 4컷 창 · Color Lab/Tone Curve/Camera Effects · 저장/공유 창을 확인하고
   **겹침·오버플로·콘솔 에러 0건**, 모바일 판면 글자 최소 크기, 그리고 **내보낸 영상에 들리는 소리**
-  (AudioContext 디코드 피크)까지 검사합니다. 검증용 내보내기 파일은 `downloads/`에 저장됩니다.
+  (AudioContext 디코드 피크 > 0.2)까지 검사합니다. 검증용 내보내기 파일은 `downloads/`에 저장됩니다.
+- `tests/e2e/video-fix.spec.ts` — 음소거 자동재생 클립이 [소리 켜기] 탭 한 번으로 실제 PCM을
+  내보내는지(Web Audio `AnalyserNode` RMS > 0.01), 모바일에서 길게 눌러도 원본 비교 배지가
+  뜨지 않는지, 톤 커브가 `.stage-wrap` 안에서 투명·중앙·스테이지 내부에 머무는지를 검증합니다.
 
 ## 크레딧
 
