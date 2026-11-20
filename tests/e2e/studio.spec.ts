@@ -119,6 +119,164 @@ test('landing: Nordlys lockup, one open card, the corner cluster and both palett
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
 
+test('landing header: the editor title bar, both portal doors and the ⋮ menu', async ({ page }) => {
+  mkdirSync(SHOT_DIR, { recursive: true });
+  const console = watch(page);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+
+  // ── the bar itself: 56px, pinned, and the scroll box starts under it ──
+  const bar = page.locator('.landing .topbar.landing-top');
+  await expect(bar).toBeVisible();
+  const layout = await page.evaluate(() => {
+    const header = document.querySelector('.landing .topbar.landing-top') as HTMLElement;
+    const scroll = document.querySelector('.landing-scroll') as HTMLElement;
+    const actions = document.querySelector('.landing-top .topbar-actions') as HTMLElement;
+    const rect = header.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    return {
+      headerHeight: Math.round(rect.height),
+      headerTop: Math.round(rect.top),
+      scrollTop: Math.round(scroll.getBoundingClientRect().top),
+      actionsInset: Math.round(1280 - actionsRect.right),
+      portalLinks: document.querySelectorAll('.landing-top .portal-link').length,
+      menus: header.querySelectorAll('[data-testid="nav-menu-button"]').length,
+      badge: (document.querySelector('.landing-top .brand-badge') as HTMLElement).textContent,
+    };
+  });
+  process.stdout.write(`[landing header] ${JSON.stringify(layout)}\n`);
+  expect(layout.headerHeight).toBe(56);
+  expect(layout.headerTop).toBe(0);
+  expect(layout.scrollTop).toBe(56);
+  expect(layout.actionsInset).toBeLessThanOrEqual(56);
+  expect(layout.portalLinks).toBe(2);
+  expect(layout.menus).toBe(1);
+  expect(layout.badge).toBe('STUDIO');
+
+  // The two doors are real links to the real portals, and they open elsewhere.
+  await expect(page.locator('[data-testid="landing-webhq"]')).toBeVisible();
+  await expect(page.locator('[data-testid="landing-webhq"]')).toHaveAttribute('href', 'https://hyangdan2.github.io/');
+  await expect(page.locator('[data-testid="landing-webhq"]')).toHaveAttribute('target', '_blank');
+  await expect(page.locator('[data-testid="landing-apps"]')).toBeVisible();
+  await expect(page.locator('[data-testid="landing-apps"]')).toHaveAttribute('href', 'https://hyangdan2.github.io/ApplicationHub/');
+  await expect(page.locator('[data-testid="landing-open"]')).toBeVisible();
+  await expect(page.locator('[data-testid="landing-sample"]')).toBeVisible();
+  await expectNoOverlap(page, '.landing-top .brand', '.landing-top .topbar-actions');
+  await expectNoOverlap(page, '.landing-top .brand-badge', '.landing-top .topbar-actions');
+
+  // ── the bar does not scroll with the page ──
+  await page.evaluate(() => { (document.querySelector('.landing-scroll') as HTMLElement).scrollTop = 700; });
+  await page.waitForTimeout(250);
+  const pinned = await page.evaluate(() => ({
+    scrolled: (document.querySelector('.landing-scroll') as HTMLElement).scrollTop,
+    headerTop: Math.round((document.querySelector('.landing-top') as HTMLElement).getBoundingClientRect().top),
+  }));
+  expect(pinned.scrolled).toBeGreaterThan(100);
+  expect(pinned.headerTop).toBe(0);
+  await page.evaluate(() => { (document.querySelector('.landing-scroll') as HTMLElement).scrollTop = 0; });
+  await page.waitForTimeout(250);
+
+  // ── the hero: mark, wordmark with the HD2Lab badge, the headline under it ──
+  const hero = await page.evaluate(() => ({
+    svg: document.querySelectorAll('.hero .hero-mark svg').length,
+    markBox: (() => { const box = (document.querySelector('.hero-mark') as HTMLElement).getBoundingClientRect(); return { w: Math.round(box.width), h: Math.round(box.height) }; })(),
+    title: (document.querySelector('.hero-title-row h1') as HTMLElement).textContent,
+    badge: (document.querySelector('.hero-title-row .hero-badge') as HTMLElement).textContent,
+    headline: (document.querySelector('.hero-headline') as HTMLElement).textContent,
+    stats: Array.from(document.querySelectorAll('.hero-stats b')).map((b) => b.textContent),
+  }));
+  process.stdout.write(`[landing hero] ${JSON.stringify(hero)}\n`);
+  expect(hero.svg).toBe(1);
+  expect(hero.markBox.w).toBe(62);
+  expect(hero.markBox.h).toBe(62);
+  expect(hero.title).toBe('Nordlys');
+  expect(hero.badge).toBe('HD2Lab');
+  expect(hero.headline).toContain('하나의 플레이트로');
+  expect(hero.stats).toEqual(['13', '69', '4K', '0 B']);
+
+  await shot(page, 'nordlys_landing_v2.png');
+
+  // ── the landing's ⋮ carries the workspace, samples and both portals ──
+  await page.locator('.landing-top [data-testid="nav-menu-button"]').click();
+  const menu = page.locator('[data-testid="nav-menu"]');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('.portal-menu-head')).toHaveText(['WORKSPACE', 'SAMPLES', 'NAVIGATION']);
+  await expect(menu.locator('.portal-item')).toHaveCount(11);
+  await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toHaveCount(1);
+  await expect(menu.locator('a[href="https://hyangdan2.github.io/ApplicationHub/"]')).toHaveCount(1);
+  // nothing is open yet, so the media-clearing entries are honestly disabled
+  await expect(menu.getByRole('menuitem', { name: /미디어 비우기/ })).toBeDisabled();
+  await page.waitForTimeout(260);
+  await shot(page, 'nordlys_landing_nav_menu.png');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="nav-menu"]')).toHaveCount(0);
+
+  // The header's sample door opens the first sample, the same as the cards do.
+  await page.locator('[data-testid="landing-sample"]').click();
+  await expect(page.locator('[data-testid="plate-canvas"]')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.topbar [data-testid="nav-menu-button"]')).toHaveCount(1);
+
+  expect(console.errors, console.errors.join(' | ')).toEqual([]);
+});
+
+test('mobile 390×844: the landing bar keeps one row, portals fold into ⋮', async ({ page }) => {
+  mkdirSync(SHOT_DIR, { recursive: true });
+  const console = watch(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  const bar = await page.evaluate(() => {
+    const header = document.querySelector('.landing .topbar.landing-top') as HTMLElement;
+    const brand = document.querySelector('.landing-top .brand') as HTMLElement;
+    const actions = document.querySelector('.landing-top .topbar-actions') as HTMLElement;
+    const open = document.querySelector('[data-testid="landing-open"]') as HTMLElement;
+    const h = header.getBoundingClientRect();
+    const b = brand.getBoundingClientRect();
+    const a = actions.getBoundingClientRect();
+    return {
+      header: { top: Math.round(h.top), bottom: Math.round(h.bottom), height: Math.round(h.height) },
+      brand: { left: Math.round(b.left), right: Math.round(b.right), top: Math.round(b.top), bottom: Math.round(b.bottom) },
+      actions: { left: Math.round(a.left), right: Math.round(a.right), top: Math.round(a.top), bottom: Math.round(a.bottom) },
+      openBox: { w: Math.round(open.getBoundingClientRect().width), h: Math.round(open.getBoundingClientRect().height) },
+      badge: getComputedStyle(document.querySelector('.landing-top .brand-badge') as HTMLElement).display,
+    };
+  });
+  process.stdout.write(`[mobile landing bar] ${JSON.stringify(bar)}\n`);
+  // one row: both ends inside the bar's own height
+  expect(bar.brand.top).toBeGreaterThanOrEqual(bar.header.top);
+  expect(bar.brand.bottom).toBeLessThanOrEqual(bar.header.bottom);
+  expect(bar.actions.bottom).toBeLessThanOrEqual(bar.header.bottom);
+  // and no collision, with room to spare inside 390
+  expect(bar.brand.right).toBeLessThan(bar.actions.left);
+  expect(bar.brand.left).toBeGreaterThanOrEqual(0);
+  expect(bar.actions.right).toBeLessThanOrEqual(390);
+  // the compact door stays a thumb-sized square, not a shrinking label
+  expect(bar.openBox.w).toBeGreaterThanOrEqual(34);
+  expect(bar.openBox.w).toBeLessThanOrEqual(44);
+  expect(bar.openBox.h).toBeGreaterThanOrEqual(34);
+  await expectNoOverlap(page, '.landing-top .brand', '.landing-top .topbar-actions');
+
+  // the header's own links are gone; the ⋮ holds them instead
+  await expect(page.locator('.landing-top .portal-link').first()).toBeHidden();
+  await expect(page.locator('[data-testid="landing-sample"]')).toBeHidden();
+  await expect(page.locator('[data-testid="landing-open"]')).toBeVisible();
+  await expect(page.locator('[data-testid="theme-fab"]')).toBeVisible();
+  await shot(page, 'nordlys_landing_mobile_v2.png');
+
+  await page.locator('.landing-top [data-testid="nav-menu-button"]').click();
+  const menu = page.locator('[data-testid="nav-menu"]');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toBeVisible();
+  await expect(menu.locator('a[href="https://hyangdan2.github.io/ApplicationHub/"]')).toBeVisible();
+  const menuBox = await menu.boundingBox();
+  expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(390);
+  await page.waitForTimeout(260);
+  await shot(page, 'nordlys_landing_mobile_menu.png');
+
+  expect(console.errors, console.errors.join(' | ')).toEqual([]);
+});
+
 test('desktop editor: title-backdrop slide, strip, cluster, and no corner collisions', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
@@ -230,6 +388,7 @@ test('navigation menu: workspace, samples and portal links', async ({ page }) =>
   await expect(menu.getByRole('menuitem', { name: /미디어 비우기/ })).toBeEnabled();
   await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toHaveCount(1);
   await expect(menu.locator('a[href="https://hyangdan2.github.io/ApplicationHub/"]')).toHaveCount(1);
+  await page.waitForTimeout(260);
   await shot(page, 'nordlys_nav_menu.png');
 
   // Emblem ink toggles from the menu and the badge says which way it went.

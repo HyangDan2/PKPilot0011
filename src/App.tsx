@@ -666,12 +666,17 @@ export default function App() {
           error={error}
           hasSession={state.media.length > 0}
           sessionLabel={editorSessionLabel}
+          isPhoto={mediaKind === 'photo'}
+          emblemMono={state.frame.emblemMono}
           onOpenPhotos={(files) => void openPhotos(files)}
           onOpenVideo={(file) => void openVideo(file)}
           onLoadSample={(sample) => void loadSample(sample)}
           onPickFrame={(id) => void pickFrame(id)}
           onContinue={() => setView('editor')}
           onDismissError={() => setError(null)}
+          onResetExif={() => setMetaOverride({})}
+          onClear={() => { clearMedia(); dispatch({ type: 'clear-media' }); setView('landing'); }}
+          onEmblemMono={(mono) => dispatch({ type: 'set-frame', patch: { emblemMono: mono } })}
         />
         {fourCutWindow}
         {replaceInput}

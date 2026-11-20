@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { FRAMES } from '../plate/frames';
-import { IconArrowLeft, IconPhoto, IconSpark, IconVideo } from './Icons';
+import { IconApps, IconArrowLeft, IconHome, IconPhoto, IconSpark, IconVideo } from './Icons';
+import { NavMenu } from './NavMenu';
 import { routeFiles } from '../media/route';
 import type { FrameId } from '../types/studio';
 
@@ -24,12 +25,17 @@ interface LandingProps {
   error: string | null;
   hasSession: boolean;
   sessionLabel: string;
+  isPhoto: boolean;
+  emblemMono: boolean;
   onOpenPhotos: (files: File[]) => void;
   onOpenVideo: (file: File) => void;
   onLoadSample: (sample: SampleItem) => void;
   onPickFrame: (frame: FrameId) => void;
   onContinue: () => void;
   onDismissError: () => void;
+  onResetExif: () => void;
+  onClear: () => void;
+  onEmblemMono: (mono: boolean) => void;
 }
 
 /** The HD2Lab dual-skew mark: two hollow parallelograms, never a filled blob. */
@@ -51,7 +57,12 @@ export function HD2LabMark({ size = 30 }: { size?: number }) {
 
 export function Landing(props: LandingProps) {
   const input = useRef<HTMLInputElement | null>(null);
+  const scroll = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  /** On the landing, "home" is the top of this scroll box — the title bar stays. */
+  const toTop = () => scroll.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  const pickFiles = () => input.current?.click();
 
   const route = (files: File[]) => {
     const picked = routeFiles(files);
@@ -62,19 +73,98 @@ export function Landing(props: LandingProps) {
 
   return (
     <div className="landing">
-      <div className="landing-scroll">
-        <header className="landing-top">
-          <div className="brand">
-            <span className="mark" aria-hidden />
-            <span className="brand-name">HD2Lab</span>
-            <em>Nordlys</em>
-          </div>
-          <span className="brand-badge">STUDIO</span>
-        </header>
+      {/* The same 56px bar the editor carries, so the landing never loses the
+          Web-HQ lockup or the way back to the other HD2Lab apps. Only this
+          bar is pinned; everything under it scrolls in `.landing-scroll`. */}
+      <header className="topbar landing-top">
+        <button
+          type="button"
+          className="brand"
+          onClick={toTop}
+          aria-label="Nordlys 홈 — 화면 맨 위로"
+          title="Nordlys 홈 — 화면 맨 위로"
+        >
+          <span className="mark" aria-hidden />
+          <span className="brand-name">HD2Lab</span>
+          <em>Nordlys</em>
+        </button>
+        <span className="brand-badge">STUDIO</span>
 
+        <div className="topbar-actions">
+          {/* The two doors every HD2Lab app carries. On a phone they fold into
+              the ⋮ menu so the lockup keeps the row to itself. */}
+          <a
+            className="chip portal-link"
+            href="https://hyangdan2.github.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="HD2Lab Web-HQ — 새 창에서 열기"
+            title="HD2Lab Web-HQ — Main Portal"
+            data-testid="landing-webhq"
+          >
+            <IconHome size={14} />
+            <span className="chip-label">Web-HQ ↗</span>
+          </a>
+          <a
+            className="chip portal-link"
+            href="https://hyangdan2.github.io/ApplicationHub/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="ApplicationHub — 새 창에서 열기"
+            title="ApplicationHub — Apps Catalog"
+            data-testid="landing-apps"
+          >
+            <IconApps size={14} />
+            <span className="chip-label">Apps ↗</span>
+          </a>
+          <button
+            type="button"
+            className="chip open-chip"
+            onClick={pickFiles}
+            disabled={!!props.busy}
+            aria-label="사진 · 영상 열기"
+            title="사진 · 영상 열기"
+            data-testid="landing-open"
+          >
+            <IconPhoto size={15} />
+            <span className="chip-label">열기</span>
+          </button>
+          <button
+            type="button"
+            className="chip sample-chip"
+            onClick={() => props.onLoadSample(SAMPLES[0])}
+            disabled={!!props.busy}
+            aria-label="샘플 사진 열기"
+            title="샘플 사진 열기"
+            data-testid="landing-sample"
+          >
+            <IconSpark size={15} />
+            <span className="chip-label">샘플</span>
+          </button>
+          <NavMenu
+            hasMedia={props.hasSession}
+            isPhoto={props.isPhoto}
+            emblemMono={props.emblemMono}
+            samples={SAMPLES}
+            onHome={toTop}
+            onReplace={pickFiles}
+            onResetExif={props.onResetExif}
+            onClear={props.onClear}
+            onEmblemMono={props.onEmblemMono}
+            onSample={props.onLoadSample}
+          />
+        </div>
+      </header>
+
+      <div className="landing-scroll" ref={scroll}>
         <section className="hero">
+          <span className="hero-mark" aria-hidden><HD2LabMark size={36} /></span>
+          <div className="hero-title-row">
+            <h1>Nordlys</h1>
+            <span className="brand-badge hero-badge">HD2Lab</span>
+          </div>
           <p className="hero-kicker">FILM STUDIO × SHUTTERPLATE</p>
-          <h1>한 장의 사진도,<br /><em>움직이는 클립도</em> 하나의 플레이트로.</h1>
+          <h2 className="hero-headline">한 장의 사진도,<br /><em>움직이는 클립도</em> 하나의 플레이트로.</h2>
           <p className="hero-copy">
             9종 HD2Lab 필름과 RETRO 90, 58종 Margarine 룩을 영상 프레임에 실시간으로 입히고,
             Shutterplate의 13종 프레임으로 인화합니다. 사진은 원본 1:1로, 영상은 H.264 + 사운드로.
@@ -112,7 +202,7 @@ export function Landing(props: LandingProps) {
           <button
             type="button"
             className="open-card wide"
-            onClick={() => input.current?.click()}
+            onClick={pickFiles}
             disabled={!!props.busy}
             data-testid="open-any"
           >

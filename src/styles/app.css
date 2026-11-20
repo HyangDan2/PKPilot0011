@@ -128,28 +128,53 @@ img { display: block; max-width: 100%; }
 }
 
 /* ── landing ───────────────────────────────────────────────────────────── */
-.landing { height: 100dvh; position: relative; overflow: hidden; }
+/* The landing is the editor's shell turned outward: one 56px title bar pinned
+   at the top — the same Web-HQ lockup and ⋮ the editor carries — and a single
+   scroll box under it, so the brand never scrolls away with the page. */
+.landing { height: 100dvh; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.landing .landing-top {
+  /* the lockup sits on the page's own left edge, not the topbar's */
+  padding: 0 clamp(16px, 4.6vw, 56px);
+  gap: 10px; flex-wrap: nowrap;
+}
+.landing-top .brand { margin: 0; min-height: 40px; }
+.landing-top .topbar-actions { gap: 8px; }
+/* `.chip span` is the mono count a filter chip carries; these spans are names. */
+.landing-top .chip .chip-label {
+  margin-left: 0; color: inherit; font-family: var(--font); font-size: 11.5px; letter-spacing: 0;
+}
 .landing-scroll {
-  height: 100%; overflow-y: auto; overscroll-behavior: contain;
-  padding: 26px clamp(18px, 5vw, 56px) 110px;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 22px clamp(16px, 4.6vw, 56px) 110px;
   background:
     radial-gradient(1200px 600px at 82% -10%, var(--glow-1), transparent 60%),
     radial-gradient(900px 500px at 8% 8%, var(--glow-2), transparent 55%),
     var(--bg);
 }
-.landing-top { display: flex; align-items: center; gap: 10px; }
-.landing-top .brand { margin: 0; min-height: 40px; }
-.hero { max-width: 900px; margin: clamp(34px, 7vh, 76px) auto 34px; text-align: center; }
+.hero { max-width: 900px; margin: clamp(18px, 4vh, 44px) auto 34px; text-align: center; }
+/* the hero's own mark, in a card: the studio's face before its name */
+.hero-mark {
+  width: 62px; height: 62px; margin: 0 auto; display: grid; place-items: center;
+  border-radius: 18px; background: var(--surface); border: 1px solid var(--line);
+  box-shadow: var(--shadow); color: var(--accent);
+}
+.hero-title-row { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; }
+.hero-title-row h1 {
+  margin: 0; font-size: clamp(26px, 3.4vw, 34px); font-weight: 800;
+  letter-spacing: -0.03em; line-height: 1.1;
+}
+.hero-badge { font-size: 10px; padding: 3px 7px; }
 .hero-kicker {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.32em; color: var(--accent);
-  margin: 0 0 18px;
+  margin: 16px 0 12px;
 }
-.hero h1 {
-  margin: 0; font-size: clamp(32px, 5.4vw, 62px); line-height: 1.08; letter-spacing: -0.035em; font-weight: 700;
+.hero-headline {
+  margin: 0; font-size: clamp(30px, 5vw, 56px); line-height: 1.08; letter-spacing: -0.035em; font-weight: 700;
 }
-.hero h1 em { font-style: normal; color: var(--accent); }
-.hero-copy { margin: 22px auto 0; max-width: 640px; color: var(--muted); font-size: 15px; line-height: 1.75; }
-.hero-stats { display: flex; justify-content: center; gap: 26px; margin-top: 26px; flex-wrap: wrap; }
+.hero-headline em { font-style: normal; color: var(--accent); }
+.hero-copy { margin: 18px auto 0; max-width: 640px; color: var(--muted); font-size: 15px; line-height: 1.75; }
+.hero-stats { display: flex; justify-content: center; gap: 26px; margin-top: 22px; flex-wrap: wrap; }
 .hero-stats span { font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
 .hero-stats b { display: block; font-size: 22px; color: var(--ink); font-weight: 650; letter-spacing: -0.02em; }
 
@@ -820,8 +845,11 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
 }
 
 @media (max-width: 640px) {
-  .hero { margin-top: 26px; }
+  .hero { margin-top: 18px; }
   .hero-stats { gap: 16px; }
+  .hero-mark { width: 54px; height: 54px; border-radius: 15px; }
+  .hero-mark .brand-mark { width: 31px !important; height: 31px !important; }
+  .hero-title-row h1 { font-size: 26px; }
   .sample-row { grid-template-columns: 1fr 1fr; gap: 10px; }
   .sample-card img, .sample-video { aspect-ratio: 1 / 1; }
   .frame-chip-grid { grid-template-columns: 1fr 1fr; }
@@ -856,6 +884,20 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
   .strip-text small { max-width: 74px; }
   .open-card.wide { flex-direction: column; align-items: flex-start; }
   .open-card .open-cta { margin-left: 0; }
+  .landing-top .sample-chip { display: none; }
+}
+
+/* The landing's portal links stay on the bar only while there is room for
+   them; narrower than this they live in the same ⋮ menu the editor uses. */
+@media (max-width: 759px) {
+  .landing-top .portal-link { display: none; }
+}
+
+/* A phone keeps one door on the bar:
+   [mark] HD2Lab | Nordlys [STUDIO] … [열기] [⋮] — one row, never two. */
+@media (max-width: 519px) {
+  .landing-top .open-chip { width: 36px; height: 36px; padding: 0; justify-content: center; }
+  .landing-top .open-chip .chip-label { display: none; }
 }
 
 /* The narrowest phones: the wordmark steps down before the row has to wrap. */
