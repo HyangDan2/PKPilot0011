@@ -222,3 +222,49 @@ export const IconCamera = (p: IconProps) => (
     <circle cx="12" cy="13.3" r="3.2" />
   </svg>
 );
+
+/** Folder — the workspace door and the strip's own name. */
+export const IconFolder = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.2h8.5A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
+  </svg>
+);
+
+/** Search — the film shelf's own filter. */
+export const IconSearch = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M15.6 15.6 21 21" />
+  </svg>
+);
+
+export const IconChevronUp = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m6 14 6-6 6 6" />
+  </svg>
+);
+
+export const IconChevronDown = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m6 10 6 6 6-6" />
+  </svg>
+);
+
+export const IconChevronLeft = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m14 6-6 6 6 6" />
+  </svg>
+);
+
+export const IconChevronRight = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m10 6 6 6-6 6" />
+  </svg>
+);
+
+/** Film strip — the workspace's cut of stills and clips. */
+export const IconGrip = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" strokeWidth="2.4" />
+  </svg>
+);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialStudio, studioReducer } from '../src/state/studio';
+import { initialStudio, sessionOf, studioReducer } from '../src/state/studio';
 import type { MediaInfo } from '../src/types/studio';
 import { fitPhotoBox } from '../src/studio/render';
 
@@ -117,5 +117,32 @@ describe('fitPhotoBox', () => {
     const box = fitPhotoBox({ width: 0, height: 0 }, { width: 0, height: 0 });
     expect(box.width).toBeGreaterThan(0);
     expect(box.height).toBeGreaterThan(0);
+  });
+});
+
+describe('workspace sessions', () => {
+  it('hands a file back its own grade, frame and cut', () => {
+    let state = studioReducer(initialStudio(), { type: 'open-video', media: video });
+    state = studioReducer(state, { type: 'select-filter', filter: { kind: 'film', filmId: 'FS-007', presetId: null } });
+    state = studioReducer(state, { type: 'set-frame', patch: { style: 'pro', padPct: 9, enabled: false } });
+    state = studioReducer(state, { type: 'set-trim', trim: { start: 1.2, end: 4.4 } });
+    state = studioReducer(state, { type: 'set-input-guard', guard: 1 });
+    const saved = sessionOf(state);
+
+    // Another file: a still with its own stock and frame.
+    let other = studioReducer(initialStudio(), { type: 'open-photos', media: [photo] });
+    other = studioReducer(other, { type: 'select-filter', filter: { kind: 'neutral', filmId: '', presetId: null } });
+    other = studioReducer(other, { type: 'set-frame', patch: { style: 'gallery', padPct: 4 } });
+
+    const back = studioReducer(other, { type: 'restore-session', session: saved });
+    expect(back.filter).toEqual(saved.filter);
+    expect(back.frame.style).toBe('pro');
+    expect(back.frame.padPct).toBe(9);
+    expect(back.frame.enabled).toBe(false);
+    expect(back.trim).toEqual({ start: 1.2, end: 4.4 });
+    expect(back.inputGuard).toBe(1);
+    expect(back.grade.filmId).toBe('FS-007');
+    // The media itself is untouched by a session restore.
+    expect(back.media).toEqual(other.media);
   });
 });
