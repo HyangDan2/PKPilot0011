@@ -155,8 +155,9 @@ tools/generate_brand_assets.py  아이콘 세트 · manifest · OG 카드 재생
   래스터화합니다. 그래서 파비콘과 OG 카드의 마크가 같은 획입니다.
 - 다시 만들 때: `python3 tools/generate_brand_assets.py` (한글 폰트는 `--font`로 지정 가능).
   스크립트가 `public/` 루트와 `public/brand/` 사본, `manifest.json`까지 함께 씁니다.
-- `index.html`의 모든 아이콘·OG URL에는 `?v=20261120-nordlys` 버전 쿼리가 붙어 있어, 자산을
-  다시 만들면 이 값만 올리면 브라우저·스크래퍼 캐시가 갈립니다.
+- `index.html`의 모든 아이콘 URL에는 `?v=20261120-nordlys`, OG·트위터 카드 URL에는
+  `?v=20261120-nordlys2` 버전 쿼리가 붙어 있어, 자산을 다시 만들면 해당 값만 올리면
+  브라우저·스크래퍼 캐시가 갈립니다.
 
 ## 테스트
 

@@ -252,7 +252,7 @@ def build_og(out_dir: str) -> str:
 
     # 5) three tiles
     tiles = [
-        ("01 / FILMS", "69 필름 룩", ["VAERN · SKELD · RETRO 90", "그리고 Margarine 58종."]),
+        ("01 / FILMS", "68 필름 룩", ["VAERN · SKELD · RETRO 90", "그리고 Margarine 58종."]),
         ("02 / FRAMES", "13 시그니처 프레임", ["보더 · 노출 스펙 · 엠블럼,", "4컷 멀티 플레이트까지."]),
         ("03 / VIDEO & AUDIO", "H.264 + 사운드", ["클립도 같은 룩으로,", "소리까지 담아 내보냅니다."]),
     ]
