@@ -125,6 +125,10 @@ src/
   media/                  사진/영상 로더, EXIF → 판면 메타
   state/                  스튜디오 리듀서
 public/
+  favicon.ico · favicon.svg · favicon-32x32.png · apple-touch-icon.png · icon-192/512.png
+                          HD2Lab 듀얼 스큐 마크(Soft Iris) 아이콘 세트 — brand/ 에도 같은 사본
+  manifest.json           PWA 매니페스트 (HD2Lab Nordlys · standalone · #0B1020)
+  og-image.png · social-preview.png   1200×630 링크 카드
   plate/                  검증된 Shutterplate 엔진(plate.js, emblems.js) — 그대로 이식
   luts/                   FS-001~010 + identity .cube
   samples/                샘플 사진 3장 + sample-clip.mp4
@@ -132,6 +136,7 @@ tests/                    Vitest 단위 테스트 + Playwright E2E
 tools/make-sample-clip.mjs      샘플 클립 생성(ffmpeg 필요)
 tools/remake-sample-audio.mjs   샘플 클립의 소리만 교체(mediabunny + AAC 인코더, ffmpeg 불필요)
 tools/check-sample-clip.mjs     샘플의 오디오 피크·RMS·그림 규격 실측
+tools/generate_brand_assets.py  아이콘 세트 · manifest · OG 카드 재생성 (Pillow + cairosvg)
 ```
 
 ### 자산 이식 원칙
@@ -140,6 +145,18 @@ tools/check-sample-clip.mjs     샘플의 오디오 피크·RMS·그림 규격 �
 - 판면 엔진과 메이커 엠블럼 벡터는 **PKPilot0003**의 것을 **한 줄도 고치지 않고** 로드합니다
   (`public/plate/`). 그래서 이 앱의 인화 결과는 Shutterplate와 픽셀 단위로 같습니다.
 - 기존 두 저장소는 건드리지 않았습니다.
+
+### 브랜드 에셋
+
+- 링크 카드(`og-image.png` 1200×630)는 Shutterplate(`PKPilot0003`)의 카드 레이아웃 — Soft Iris
+  격자 바탕, 흰 컨테이너 카드, 키커 + 개인정보 표식, 듀얼 스큐 락업, 두 줄 헤드라인, 타일 3개,
+  푸터 레일 — 을 그대로 계승하고 내용만 Nordlys의 것으로 바꿨습니다.
+- 아이콘은 사이트 헤더·판면과 같은 듀얼 스큐 마크를 SVG로 그려 16/32/48 ICO와 180/192/512 PNG로
+  랑스터화합니다. 그래서 파비콘과 OG 카드의 마크가 같은 획입니다.
+- 다시 만들 때: `python3 tools/generate_brand_assets.py` (한글 폰트는 `--font`로 지정 가능).
+  스크립트가 `public/` 루트와 `public/brand/` 사본, `manifest.json`까지 함께 씁니다.
+- `index.html`의 모든 아이콘·OG URL에는 `?v=20261120-nordlys` 버전 쿼리가 붙어 있어, 자산을
+  다시 만들면 이 값만 올리면 브라우저·스크래퍼 캐시가 갈립니다.
 
 ## 테스트
 
