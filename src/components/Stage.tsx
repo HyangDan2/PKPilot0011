@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
-import { buildPlateLayout, virtualPhotoBox } from '../studio/render';
+import { buildPlateLayout, stageTypeBoost, virtualPhotoBox } from '../studio/render';
 import { PhotoGrader } from '../studio/grading';
 import { IconVolume, IconVolumeOff } from './Icons';
 import type { FrameSettings, GradeSettings, MediaInfo, PlateMeta, TrimRange } from '../types/studio';
@@ -47,10 +47,12 @@ const MAX_DPR = 2;
  * the preview is exactly the exported frame — filter, margins, emblem and all.
  *
  * The plate is designed at a virtual print size (long edge >= 1200px) and then
- * scaled to whatever room the stage has. The frame's own proportions are
- * Shutterplate's: the stage only ever scales the finished plate, it never asks
- * for a bigger band or a bigger type unit, so the preview and the 1:1 export
- * are the same plate at two sizes.
+ * scaled to whatever room the stage has. On a phone that scale is a third, so
+ * the plate is asked for only the type boost that scale needs: the band and the
+ * type unit grow together while the photograph, its margin and the plate width
+ * stay exactly where they are. The boost is capped (STAGE_MAX_TYPE_BOOST) so a
+ * phone gets readable copy instead of a swollen frame, and the 1:1 export never
+ * asks for it — the print keeps Shutterplate's designed proportions.
  */
 export function Stage(props: StageProps) {
   const { plate, emblems, media, bank, frame, meta, trim, playing, showOriginal, inputGuard, revision, muted, onToggleMute, onTime, onDuration, onTogglePlay } = props;
@@ -248,8 +250,17 @@ export function Stage(props: StageProps) {
       // One virtual print size for every stage: no more phone-sized plate.
       const base = virtualPhotoBox(activeMedia, PLATE_BASE_EDGE, PLATE_BASE_EDGE);
       const photo = { width: base.width, height: base.height };
-      const layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null });
-      const scale = Math.min(1, room.width / layout.W, room.height / layout.H);
+      // Fit the plate, measure how small its smallest row lands, and lay it out
+      // again with just enough type boost to read it. The scale is measured
+      // once more from the boosted plate, because the taller band takes a
+      // little of the room back.
+      let layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null });
+      let scale = Math.min(1, room.width / layout.W, room.height / layout.H);
+      const boost = stageTypeBoost({ u: layout.W / 1000, band: layout.band, cssScale: scale });
+      if (boost > 1) {
+        layout = buildPlateLayout({ plate, emblems, frame, meta, photo, image: painter?.canvas ?? null, typeBoost: boost });
+        scale = Math.min(1, room.width / layout.W, room.height / layout.H);
+      }
 
       if (cancelled) return;
       layoutRef.current = layout;

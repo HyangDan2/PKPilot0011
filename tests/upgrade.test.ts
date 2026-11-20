@@ -13,7 +13,7 @@ import {
 } from '../src/export/codecs';
 import { routeFiles } from '../src/media/route';
 import { specFields, withSpecFallback } from '../src/media/spec';
-import { virtualPhotoBox } from '../src/studio/render';
+import { STAGE_MAX_TYPE_BOOST, STAGE_TYPE_TARGET_CSS, stageTypeBoost, virtualPhotoBox } from '../src/studio/render';
 import { initialStudio, studioReducer } from '../src/state/studio';
 import type { MediaInfo } from '../src/types/studio';
 
@@ -181,6 +181,37 @@ describe('the stage designs at Shutterplate’s print size and only scales it', 
     const big = virtualPhotoBox({ width: 4000, height: 3000 }, 1200, 1200);
     expect(Math.max(big.width, big.height)).toBe(1200);
   });
+
+  it('asks for no type boost on a stage that already reads at print scale', () => {
+    // A 1280×800 desktop shows Classic Gallery at about 0.53: its smallest row
+    // lands above the target, so the frame is exactly Shutterplate's.
+    const boost = stageTypeBoost({ u: 1.308, band: 158, cssScale: 0.525 });
+    expect(boost).toBe(1);
+  });
+
+  it('boosts a phone’s copy only as far as the cap, not to a card', () => {
+    // 390×844: Classic Gallery at ~0.27 puts the smallest row near 3.3px.
+    const boost = stageTypeBoost({ u: 1.308, band: 158, cssScale: 0.27 });
+    expect(boost).toBe(STAGE_MAX_TYPE_BOOST);
+    expect(boost).toBeLessThanOrEqual(1.6);
+  });
+
+  it('sets a target a boosted phone actually reaches', () => {
+    // The boost lifts the band with the type, so the row grows by the boost and
+    // the target is met at the cap: 3.33px × 1.6 ≈ 5.3px.
+    expect(STAGE_TYPE_TARGET_CSS).toBeGreaterThanOrEqual(5.2);
+    expect(STAGE_TYPE_TARGET_CSS).toBeLessThanOrEqual(6);
+    expect(3.33 * STAGE_MAX_TYPE_BOOST).toBeGreaterThanOrEqual(5.2);
+  });
+
+  it('leaves a half-size stage a modest boost instead of the whole cap', () => {
+    // Nothing to do with the phone cap: the boost matches what the scale lacks.
+    const boost = stageTypeBoost({ u: 1.308, band: 158, cssScale: 0.4 });
+    expect(boost).toBeGreaterThan(1);
+    expect(boost).toBeLessThan(1.3);
+    const target = stageTypeBoost({ u: 1.308, band: 158, cssScale: 0.2 });
+    expect(target).toBeGreaterThanOrEqual(boost);
+  });
 });
 
 /* ------------------------------------------------------------- the engine */
@@ -221,6 +252,21 @@ describe('the plate keeps Shutterplate’s designed proportions', () => {
     const layout = plate.layout({ w: 1200, h: 750 }, { style: 'gallery' });
     expect(layout.uBase as number).toBeCloseTo((layout.W as number) / 1000, 5);
     expect(layout.band as number).toBe(Math.round((layout.padX as number) + 750 * 0.13));
+  });
+
+  it('grows the band with the type for a phone, and only that far', () => {
+    // The stage's phone boost is 1.6: the band goes 15.6% → ~23% of the plate,
+    // never the 35% card an uncapped 2.6× made, while the copy grows with it.
+    const base = plate.layout({ w: 1200, h: 800 }, { style: 'gallery' });
+    const phone = plate.layout({ w: 1200, h: 800 }, { style: 'gallery', typeBoost: STAGE_MAX_TYPE_BOOST });
+    expect(phone.typeBoost).toBe(STAGE_MAX_TYPE_BOOST);
+    expect(phone.W).toBe(base.W);
+    expect(phone.PW).toBe(base.PW);
+    expect(phone.padX).toBe(base.padX);
+    expect(phone.band).toBe(Math.round((base.band as number) * STAGE_MAX_TYPE_BOOST));
+    expect((phone.u as number) / (base.u as number)).toBeCloseTo(STAGE_MAX_TYPE_BOOST, 5);
+    expect((phone.band as number) / (phone.H as number)).toBeGreaterThan(0.19);
+    expect((phone.band as number) / (phone.H as number)).toBeLessThanOrEqual(0.23);
   });
 
   it('ships the four themes the 4-cut window opens with', () => {

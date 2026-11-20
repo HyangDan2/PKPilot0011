@@ -41,6 +41,46 @@ export function virtualPhotoBox(
 }
 
 /**
+ * The frame's smallest row (about `u * 11`, or `band * 0.078`, whichever is
+ * tighter) has to stay legible once the plate is scaled down to the stage.
+ * A phone shows the print at roughly a third of its size, where that row fell
+ * to three screen pixels; a desktop shows it at more than half, where it is
+ * already comfortable.
+ */
+export const STAGE_TYPE_TARGET_CSS = 5.4;
+/**
+ * The cap is what keeps the frame slim: the boost grows the band with the type,
+ * so an uncapped 2.6× turned Classic Gallery's 15.6% band into a 35% card. At
+ * 1.6 the band lands near 23% — still a frame, and the copy reads at arm's
+ * length. The 1:1 export never asks for a boost, so a print keeps the frame's
+ * designed proportions.
+ */
+export const STAGE_MAX_TYPE_BOOST = 1.6;
+
+/**
+ * How much the plate's type has to grow for this display to read it. Returns 1
+ * when the smallest row already lands above the target (every desktop stage),
+ * otherwise the factor the plate should be laid out with, capped at
+ * `STAGE_MAX_TYPE_BOOST` so the band never balloons.
+ */
+export function stageTypeBoost(input: {
+  u: number;
+  band: number;
+  cssScale: number;
+  targetCssPx?: number;
+  maxBoost?: number;
+}): number {
+  const target = input.targetCssPx ?? STAGE_TYPE_TARGET_CSS;
+  const max = input.maxBoost ?? STAGE_MAX_TYPE_BOOST;
+  const cssScale = Math.min(1, Math.max(0.01, input.cssScale));
+  const smallestRow = Math.max(0.01, Math.min(input.u * 11, input.band * 0.078));
+  const onScreen = smallestRow * cssScale;
+  if (onScreen >= target) return 1;
+  const boost = Math.ceil((target / onScreen) * 100) / 100;
+  return Math.min(max, Math.max(1, boost));
+}
+
+/**
  * Resolves the frame's emblem: the visitor's choice, or the maker's own mark.
  */
 export function resolveEmblem(frame: FrameSettings, meta: PlateMeta, emblems?: SPEmblemsApi | null): string {
@@ -59,6 +99,8 @@ export interface PlateRequest {
   image: CanvasImageSource | null;
   /** Up to four graded images for the multi-cut plates. */
   slots?: PlateImage[];
+  /** Stage-only legibility compensation, passed through to the engine. */
+  typeBoost?: number;
 }
 
 export function buildPlateLayout(request: PlateRequest): PlateLayout {
@@ -79,9 +121,10 @@ export function buildPlateLayout(request: PlateRequest): PlateLayout {
       slots: request.slots ?? [],
     });
   }
+  const stageOptions = request.typeBoost && request.typeBoost > 1 ? { typeBoost: request.typeBoost } : {};
   const first = plate.layout(
     { w: request.photo.width, h: request.photo.height, img: request.image },
-    { ...base, style: frame.style },
+    { ...base, style: frame.style, ...stageOptions },
   );
   // A generous margin can make the plate wider than the stage; recompute once
   // with the photo box scaled by the overflow so the whole plate always fits.

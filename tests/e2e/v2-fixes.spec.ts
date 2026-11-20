@@ -7,13 +7,15 @@ import { resolve } from 'node:path';
  *  1. the corner cluster is one vertical column, in the landing and the stage;
  *  2. the photo bar is gone from the workbench — 4-cut slots live in the window;
  *  3. RETRO 90 closes the filter shelf, after the whole Margarine catalogue;
- *  4. the frame is laid out at Shutterplate's own ratio (no type boost) with
- *     Shutterplate's viewport margin around it.
+ *  4. the print is centred in a symmetric stage on a phone, where only the
+ *     frame's copy is boosted (the band stays slim) — and it is Shutterplate's
+ *     own geometry everywhere else.
  */
 
 const SHOT_DIR = process.env.SHOT_DIR || resolve(process.cwd(), '../../downloads');
 const SAMPLE_DIR = resolve(process.cwd(), 'public/samples');
-const LANE = 52; // the phone lane the corner column keeps for itself (app.css)
+/** The phone caps the frame's type boost; the band may not pass this share. */
+const MAX_BAND_SHARE = 0.23;
 
 const shot = (page: Page, name: string) => page.screenshot({ path: resolve(SHOT_DIR, name) });
 
@@ -79,8 +81,14 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 
     const [cluster, plate, strip, dock, stage] = await boxes(page, [
       '[data-testid="float-cluster"]', '[data-testid="plate-canvas"]', '[data-testid="filter-strip"]', '.dock', '.stage',
     ]);
-    // The column covers neither the print nor anything below the stage.
-    expect(overlaps(cluster, plate), 'cluster overlaps the plate').toBe(false);
+    // The column covers nothing below the stage, and it stays inside the stage.
+    // On a wide stage the print clears it; on a phone the print is centred, so
+    // the discs float over its own right corner rather than across the copy.
+    if (viewport.width > 820) {
+      expect(overlaps(cluster, plate), 'cluster overlaps the plate').toBe(false);
+    } else {
+      expect(cluster.x, 'cluster runs across the print').toBeGreaterThan(plate.x + plate.width * 0.6);
+    }
     expect(overlaps(cluster, strip), 'cluster overlaps the filter strip').toBe(false);
     expect(overlaps(cluster, dock), 'cluster overlaps the dock').toBe(false);
     // and it stays inside the stage it belongs to
@@ -194,15 +202,23 @@ async function plateFacts(page: Page) {
     const stage = document.querySelector('.stage') as HTMLElement;
     const stageBox = stage.getBoundingClientRect();
     const canvasBox = canvas.getBoundingClientRect();
+    const style = getComputedStyle(stage);
     return {
       data: { ...canvas.dataset },
-      stage: { width: Math.round(stageBox.width), height: Math.round(stageBox.height) },
-      canvas: { width: canvasBox.width, height: canvasBox.height, x: canvasBox.x, y: canvasBox.y },
+      stage: {
+        x: Math.round(stageBox.x), width: Math.round(stageBox.width), height: Math.round(stageBox.height),
+        centre: stageBox.x + stageBox.width / 2,
+      },
+      padding: { left: style.paddingLeft, right: style.paddingRight },
+      canvas: {
+        width: canvasBox.width, height: canvasBox.height, x: canvasBox.x, y: canvasBox.y,
+        centre: canvasBox.x + canvasBox.width / 2,
+      },
     };
   });
 }
 
-test('mobile 390×844: Classic Gallery prints Shutterplate’s ratio, unboosted', async ({ page }) => {
+test('mobile 390×844: the print centres in the stage and only the copy is boosted', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
@@ -217,40 +233,57 @@ test('mobile 390×844: Classic Gallery prints Shutterplate’s ratio, unboosted'
   const padX = Number(d.padX);
   const padTop = Number(d.padTop);
   const band = Number(d.band);
+  const boost = Number(d.typeBoost);
   const scale = Number(d.plateScale);
-  process.stdout.write(`[v2 mobile] ${JSON.stringify({ W, H, PW, PH, padX, padTop, band, roomW, roomH, scale, pad: d.roomPad })}\n`);
+  process.stdout.write(`[v2 mobile] ${JSON.stringify({ W, H, PW, PH, padX, padTop, band, boost, roomW, roomH, scale, pad: d.roomPad })}\n`);
 
-  // No type boost: the band and the type unit are the frame's own.
-  expect(d.typeBoost).toBe('1');
+  // No lane: the stage keeps its whole width and the print sits on the screen's
+  // centre line, exactly as it does on a desktop.
+  expect(facts.padding).toEqual({ left: '0px', right: '0px' });
+  expect(Number(d.roomPad)).toBe(16);
+  expect(roomW).toBe(facts.stage.width - 2 - 16);
+  expect(roomH).toBe(facts.stage.height - 2 - 16);
+  expect(Math.abs(facts.canvas.centre - facts.stage.centre), 'the print is off centre').toBeLessThanOrEqual(1);
+
+  // The frame is still Shutterplate's: the plate width and the photo box are
+  // untouched and only the band and the type unit are boosted.
   expect(padX).toBe(Math.round(PW * 0.045));
   expect(padTop).toBe(padX);
-  expect(band).toBe(Math.round(padX + PH * 0.13)); // Classic Gallery geo: pad 4.5, extra 13
   expect(W).toBe(PW + 2 * padX);
+  const frameBand = Math.round(padX + PH * 0.13); // Classic Gallery geo: pad 4.5, extra 13
+  expect(boost).toBeGreaterThan(1.4);
+  expect(boost).toBeLessThanOrEqual(1.6);
+  expect(band).toBe(Math.round(frameBand * boost));
   expect(H).toBe(padTop + PH + band);
-  expect(band / H).toBeCloseTo(0.156, 3);
-  // Shutterplate's viewport margin: 16px on a phone, measured inside the lane.
-  expect(Number(d.roomPad)).toBe(16);
-  // .stage's content box is the lane and the 1px borders taken out of its width.
-  expect(roomW).toBe(facts.stage.width - 2 - LANE - 16);
-  expect(roomH).toBe(facts.stage.height - 2 - 16);
+  // Slim, not a card: the frame's 15.6% band, at most ~23% once boosted.
+  expect(band / H).toBeGreaterThan(0.19);
+  expect(band / H).toBeLessThanOrEqual(MAX_BAND_SHARE);
+  // and the smallest row the frame prints is legible at arm's length
+  expect(Number(d.minTypeCss)).toBeGreaterThanOrEqual(5.2);
+  expect(Number(d.minTypeCss)).toBeLessThanOrEqual(6.2);
   expect(scale).toBeCloseTo(Math.min(1, roomW / W, roomH / H), 3);
   expect(facts.canvas.width).toBeLessThanOrEqual(roomW + 1);
   expect(facts.canvas.height).toBeLessThanOrEqual(roomH + 1);
 
-  await shot(page, 'nordlys_v2_mobile.png');
+  await shot(page, 'nordlys_v3_mobile_centred.png');
 
-  // The same plate geometry on a desktop: the design does not follow the viewport.
+  // The same plate on a desktop: no boost, the frame's own band ratio, centred.
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(900);
   const wide = await plateFacts(page);
-  expect(wide.data.plateSize).toBe(d.plateSize);
-  expect(wide.data.band).toBe(d.band);
+  const [wideW, wideH] = wide.data.plateSize!.split('x').map(Number);
+  expect(wideW).toBe(W);
+  expect(wideH).toBe(padTop + PH + frameBand);
   expect(wide.data.typeBoost).toBe('1');
+  expect(Number(wide.data.band)).toBe(frameBand);
+  expect(Number(wide.data.band) / wideH).toBeCloseTo(0.156, 3);
+  expect(Number(wide.data.minTypeCss)).toBeGreaterThanOrEqual(5.2);
   expect(Number(wide.data.roomPad)).toBe(40);
   expect(Number(wide.data.room!.split('x')[0])).toBe(wide.stage.width - 2 - 40);
   expect(Number(wide.data.room!.split('x')[1])).toBe(wide.stage.height - 2 - 40);
+  expect(Math.abs(wide.canvas.centre - wide.stage.centre)).toBeLessThanOrEqual(1);
 
   await page.evaluate(() => { document.querySelector('.filter-strip')?.scrollTo({ left: 0 }); });
   await page.waitForTimeout(500);
-  await shot(page, 'nordlys_v2_desktop.png');
+  await shot(page, 'nordlys_v3_desktop.png');
 });

@@ -323,12 +323,9 @@ button.portal-item:disabled:hover { background: transparent; }
   position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden;
   border-radius: var(--radius); border: 1px solid var(--line);
 }
-/* The corner column is a lane of its own on a narrow screen: the print is fitted
-   into the room the tools leave instead of running underneath them. The stage's
-   own viewport margin (pad 16 / 40 in Stage.tsx) is measured inside this box. */
-@media (max-width: 820px) {
-  .stage { padding-right: 52px; }
-}
+/* The corner column floats over the print's own viewport margin instead of
+   taking a lane from it: the stage stays a symmetric box, so the plate centres
+   on the screen exactly as it does on a desktop (x centre, full room width). */
 /* the viewport stays neutral: the plate's own stock must read true */
 .stage.backdrop-dark { background: radial-gradient(900px 480px at 50% 40%, #141614, #0a0b0a 72%); }
 .stage.backdrop-light { background: radial-gradient(900px 480px at 50% 40%, #e9ece6, #d8ded6 78%); }

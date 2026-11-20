@@ -365,16 +365,26 @@ test('mobile 390×844: the strip, the cluster and readable plate copy', async ({
   expect(canvas!.width).toBeLessThanOrEqual(390);
   expect(canvas!.height).toBeLessThanOrEqual(844);
 
-  // The plate is Shutterplate's own design: no type boost, the frame's ratio.
+  // The phone boosts only the copy, inside a slim frame: the band grows a
+  // little (15.6% → at most ~23%), the plate width does not.
   const boost = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-type-boost'));
   const scale = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-plate-scale'));
   const band = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-band'));
+  const minType = Number(await page.locator('[data-testid="plate-canvas"]').getAttribute('data-min-type-css'));
   const plateSize = (await page.locator('[data-testid="plate-canvas"]').getAttribute('data-plate-size'))!.split('x').map(Number);
-  process.stdout.write(`[mobile] boost=${boost} scale=${scale} band=${band} plate=${plateSize.join('x')}\n`);
-  expect(boost).toBe(1);
+  process.stdout.write(`[mobile] boost=${boost} scale=${scale} band=${band} minType=${minType} plate=${plateSize.join('x')}\n`);
+  expect(boost).toBeGreaterThan(1.4);
+  expect(boost).toBeLessThanOrEqual(1.6);
   expect(scale).toBeLessThan(0.45);
-  // the band stays the frame's own fraction of the plate, not a phone-sized balloon
-  expect(band / plateSize[1]).toBeCloseTo(0.156, 3);
+  // the band stays a slim share of the plate, not a phone-sized balloon
+  expect(band / plateSize[1]).toBeGreaterThan(0.19);
+  expect(band / plateSize[1]).toBeLessThanOrEqual(0.23);
+  // and the frame's smallest row still reads at arm's length
+  expect(minType).toBeGreaterThanOrEqual(5.2);
+
+  // The print sits on the stage's centre line: no phone lane pushes it aside.
+  const stageBox = await page.locator('.stage').boundingBox();
+  expect(Math.abs((canvas!.x + canvas!.width / 2) - (stageBox!.x + stageBox!.width / 2))).toBeLessThanOrEqual(1);
 
   // The corner cluster is one row inside the stage and touches nothing.
   const cluster = await page.locator('[data-testid="float-cluster"]').boundingBox();
@@ -388,15 +398,15 @@ test('mobile 390×844: the strip, the cluster and readable plate copy', async ({
   await expect(page.locator('[data-testid="theme-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="backdrop-switch"]')).toBeVisible();
 
-  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_mobile.png') });
-  await page.locator('[data-testid="plate-canvas"]').screenshot({ path: resolve(SHOT_DIR, 'nordlys_mobile_plate.png') });
+  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_v3_mobile.png') });
+  await page.locator('[data-testid="plate-canvas"]').screenshot({ path: resolve(SHOT_DIR, 'nordlys_v3_mobile_plate.png') });
 
   await expect(page.locator('[data-testid="filter-strip"] .strip-card')).toHaveCount(12);
   await page.locator('[data-testid="filter-strip"] [data-filter-key="FS-004"]').click();
 
   await page.locator('[data-testid="fourcut-fab"]').click();
   await expect(page.locator('[data-testid="fourcut-modal"]')).toBeVisible();
-  await shotSheet(page, 'nordlys_mobile_fourcut.png');
+  await shotSheet(page, 'nordlys_v3_mobile_fourcut.png');
   await page.keyboard.press('Escape');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
