@@ -20,12 +20,19 @@ export interface ShutterFrameSpec {
   name: string;
   author?: string;
   updatedAt: string;
-  canvas: { width: number; height: number; background: string; gradient?: { type: 'linear'; angle: number; stops: [string, string] }; light: boolean };
+  canvas: { width: number; height: number; background: string; gradient?: { type: 'linear'; angle: number; stops: [string, string] }; backgroundImage?: { dataUrl: string; opacity: number }; light: boolean };
   perforation: { enabled: boolean; style: 'side' | 'film'; color: string; holeWidth: number; holeHeight: number; gap: number };
-  cells: { x: number; y: number; w: number; h: number; radius: number }[];
+  cells: { x: number; y: number; w: number; h: number; radius: number; rotation?: number; z?: number }[];
   overlay?: { dataUrl: string; layer: 'above' | 'below'; opacity: number };
-  texts: { id: string; text: string; x: number; y: number; size: number; family: 'sans' | 'serif' | 'mono'; weight: number; align: 'left' | 'center' | 'right'; color: string; letterSpacing: number; visible?: boolean }[];
-  emblem: { enabled: boolean; x: number; y: number; maxW: number; maxH: number; align: 'left' | 'center' | 'right'; mode: 'auto' | 'light' | 'dark' };
+  /** Transparent stripe stickers and uploaded sprites share one layer stack. */
+  stickers?: {
+    id: string; kind: 'stripe' | 'sprite'; preset?: string; label?: string;
+    color: string; color2: string; opacity: number;
+    x: number; y: number; w: number; h: number;
+    rotation: number; z?: number; visible?: boolean; dataUrl?: string;
+  }[];
+  texts: { id: string; text: string; x: number; y: number; size: number; family: 'sans' | 'serif' | 'mono'; weight: number; align: 'left' | 'center' | 'right'; color: string; letterSpacing: number; rotation?: number; z?: number; visible?: boolean }[];
+  emblem: { enabled: boolean; x: number; y: number; maxW: number; maxH: number; align: 'left' | 'center' | 'right'; mode: 'auto' | 'light' | 'dark'; rotation?: number; z?: number };
 }
 
 interface ShutterFrameApi {
@@ -39,6 +46,8 @@ interface ShutterFrameApi {
   layout(spec: ShutterFrameSpec, opts?: { scale?: number; slots?: { img: CanvasImageSource | null; w: number; h: number }[]; fields?: Record<string, string> }): PlateLayout & { custom: CustomPayload };
   paint(ctx: CanvasRenderingContext2D, layout: PlateLayout): boolean;
   primeOverlay(spec: ShutterFrameSpec): Promise<ShutterFrameSpec>;
+  primeAssets(spec: ShutterFrameSpec): Promise<ShutterFrameSpec>;
+  onAssetsLoaded(fn: () => void): () => void;
   buildVars(spec: ShutterFrameSpec, fields: Record<string, string>): Record<string, string>;
   summary(spec: ShutterFrameSpec): string;
   store: {

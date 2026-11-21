@@ -196,12 +196,12 @@ export default function App() {
       try {
         const api = await loadCustomEngine();
         const rows = await loadCustomShelf();
-        for (const spec of rows) if (spec.overlay) await api.primeOverlay(spec);
+        for (const spec of rows) await api.primeOverlay(spec);
         if (!alive) return;
         setCustomFrames(customSpecs());
         const incoming = api.fromUrl(window.location.href);
         if (!incoming) return;
-        if (incoming.overlay) await api.primeOverlay(incoming);
+        await api.primeOverlay(incoming);
         registerCustomSpec(incoming);
         await persistCustom(incoming);
         if (!alive) return;
@@ -692,7 +692,7 @@ export default function App() {
 
   const applyCustomSpec = useCallback(async (spec: ShutterFrameSpec) => {
     const api = await loadCustomEngine();
-    if (spec.overlay) await api.primeOverlay(spec);
+    await api.primeOverlay(spec);
     registerCustomSpec(spec);
     await persistCustom(spec);
     setCustomFrames(customSpecs());
