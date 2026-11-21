@@ -207,6 +207,9 @@ export default function App() {
         if (!alive) return;
         setCustomFrames(customSpecs());
         dispatch({ type: 'set-frame', patch: { style: customStyleOf(incoming) as FrameId, enabled: true } });
+        /* A link that carries a frame is an invitation to fill it: the 4-cut
+           window is where the four photographs go, even on the landing. */
+        dispatch({ type: 'open-modal', modal: 'fourcut' });
         setNotice(`'${incoming.name}' 커스텀 프레임을 불러왔습니다. 네 칸을 사진으로 채워 주세요.`);
         if (window.location.hash.includes('frame=') || window.location.search.includes('frame=')) {
           history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&]frame=[^&]*/, ''));
@@ -1134,6 +1137,12 @@ export default function App() {
         {openWindow}
         {replaceInput}
         {floatingCluster(false)}
+        {notice && !fourCutWindow && (
+          <div className="toast is-notice" role="status">
+            {notice}
+            <button type="button" className="icon-btn tiny" onClick={() => setNotice(null)} aria-label="닫기">✕</button>
+          </div>
+        )}
         {error && !fourCutWindow && (
           <div className="toast error" role="alert">
             {error}
