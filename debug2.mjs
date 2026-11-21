@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/workspace/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome', args:['--no-sandbox'] });
+const ctx = await browser.newContext();
+const page = await ctx.newPage();
+await page.goto('https://hyangdan2.github.io/PKPilot0003/?v=1#editor', {waitUntil:'domcontentloaded'});
+console.log('short hash:', await page.evaluate(()=>location.href));
+const long = 'https://hyangdan2.github.io/PKPilot0003/?v=2#frame=' + 'A'.repeat(1200);
+await page.goto(long, {waitUntil:'domcontentloaded'});
+console.log('long hash len:', await page.evaluate(()=>location.hash.length), await page.evaluate(()=>typeof window.ShutterFrame));
+await page.goto('https://hyangdan2.github.io/PKPilot0003/?v=3' + '#frame=' + 'B'.repeat(1200), {waitUntil:'networkidle'});
+console.log('after boot long hash len:', await page.evaluate(()=>location.hash.length));
+await browser.close();
