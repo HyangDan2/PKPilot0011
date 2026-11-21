@@ -2,6 +2,7 @@ import type { PlateLayout, PlateImage, SPEmblemsApi, SPPlateApi } from '../plate
 import { emblemForMake } from '../plate/engine';
 import type { FrameSettings, PlateMeta } from '../types/studio';
 import { isMultiFrame } from '../types/studio';
+import { customPlateLayout, isCustomStyle, paintPlateLayout, specForStyle } from '../plate/custom';
 
 export interface StageBox {
   width: number;
@@ -101,10 +102,22 @@ export interface PlateRequest {
   slots?: PlateImage[];
   /** Stage-only legibility compensation, passed through to the engine. */
   typeBoost?: number;
+  /** Design-units → plate-pixels factor for a custom frame. */
+  customScale?: number;
 }
 
 export function buildPlateLayout(request: PlateRequest): PlateLayout {
   const { plate, frame, meta } = request;
+  // A custom four-cut frame owns its whole plate: the shared engine decides
+  // geometry, and paintPlate() hands the same layout back to it.
+  if (isCustomStyle(frame.style)) {
+    const custom = customPlateLayout(frame.style, {
+      slots: request.slots,
+      meta,
+      scale: request.customScale ?? 1,
+    });
+    if (custom) return custom;
+  }
   const emblem = resolveEmblem(frame, meta, request.emblems);
   const base = {
     emblem,
@@ -133,7 +146,13 @@ export function buildPlateLayout(request: PlateRequest): PlateLayout {
 
 /** Plate paint with the current device transform applied by the caller. */
 export function paintPlate(plate: SPPlateApi, ctx: CanvasRenderingContext2D, layout: PlateLayout): void {
-  plate.paint(ctx, layout);
+  paintPlateLayout(plate, ctx, layout);
+}
+
+/** The label a custom style prints in the title bar. */
+export function styleLabel(style: string, fallback: string): string {
+  const spec = specForStyle(style);
+  return spec ? spec.name : fallback;
 }
 
 export function platePixelSize(layout: PlateLayout, dpr = 1): { width: number; height: number } {

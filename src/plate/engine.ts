@@ -58,6 +58,13 @@ export interface PlateLayout {
   themeLabel?: string;
   opts: Record<string, unknown>;
   fields: Partial<PlateMeta>;
+  /** Set only for a `.shutterframe.json` plate: the shared engine paints it. */
+  custom?: {
+    spec: unknown;
+    slots: { img: CanvasImageSource | null; w: number; h: number }[];
+    fields: Record<string, string>;
+    scale: number;
+  };
 }
 
 export interface PlateLayoutOptions {

@@ -1,6 +1,7 @@
 import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
 import type { FrameSettings, MediaInfo, PlateMeta, TrimRange, VideoExportOptions } from '../types/studio';
-import { buildPlateLayout } from './render';
+import { buildPlateLayout, paintPlate } from './render';
+import { customExportScale, isCustomStyle } from '../plate/custom';
 import { PhotoGrader } from './grading';
 import { exportVideo, type ExportProgress, type VideoExportResult } from '../export/videoExporter';
 import { clampPlateSize, evenSize, plateEdgeCap } from '../export/codecs';
@@ -42,7 +43,7 @@ function paintTo(canvas: HTMLCanvasElement, plate: SPPlateApi, layout: PlateLayo
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('캔버스를 만들지 못했습니다.');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  plate.paint(ctx, layout);
+  paintPlate(plate, ctx, layout);
 }
 
 /** The framed export's counterpart: the graded picture, edge to edge. */
@@ -91,7 +92,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
       ? await grader.render({ source: context.image, grade: context.grade, width: media.width, height: media.height, inputGuard: context.inputGuard })
       : null;
     let layout;
-    if (context.frame.style === 'contact' || context.frame.style === 'fyra04') {
+    if (context.frame.style === 'contact' || context.frame.style === 'fyra04' || isCustomStyle(context.frame.style)) {
       const slots: { img: CanvasImageSource | null; w: number; h: number }[] = [];
       const photos = (context.photos ?? []).filter((item) => item.image).slice(0, 4);
       for (const photo of photos) {
@@ -106,6 +107,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
       layout = buildPlateLayout({
         plate: context.plate, emblems: context.emblems, frame: context.frame, meta: context.meta,
         photo: { width: 1, height: 1 }, image: null, slots,
+        customScale: isCustomStyle(context.frame.style) ? customExportScale(context.frame.style) : 1,
       });
     } else {
       layout = buildPlateLayout({

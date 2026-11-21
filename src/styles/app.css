@@ -1179,3 +1179,29 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
 
 .side-thumb-fill { position: absolute; inset: 0; display: block; }
 .side-thumb-fill img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ── custom .shutterframe.json frames ──────────────────────────────────── */
+.frame-card-wrap { position: relative; display: flex; }
+.frame-card-wrap > .frame-card { flex: 1; }
+.frame-card-wrap.selected .frame-card { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-veil); }
+.frame-remove {
+  position: absolute; top: 4px; right: 4px; z-index: 2;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--surface-1);
+  color: var(--muted); cursor: pointer;
+}
+.frame-remove:hover { color: #ff7d93; border-color: #ff7d93; }
+.frame-card.custom-import { border-style: dashed; align-items: stretch; justify-content: center; min-height: 132px; cursor: pointer; }
+.frame-card.custom-import .import-mark {
+  display: grid; place-items: center; font-size: 24px; font-weight: 300; color: var(--accent);
+  background: var(--accent-veil);
+}
+.custom-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.custom-paste { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.custom-paste textarea {
+  flex: 1; min-height: 62px; padding: 8px 10px; border-radius: 10px; resize: vertical;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink);
+  font-family: var(--mono); font-size: 11px;
+}
+.side-thumb-add { display: grid; place-items: center; font-size: 22px; color: var(--accent); }
+.side-card.side-custom-open { border-style: dashed; }

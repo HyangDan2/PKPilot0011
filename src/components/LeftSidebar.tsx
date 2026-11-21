@@ -4,6 +4,7 @@ import { FRAME_MAP, FRAMES, FYRA_THEME_LABELS, MULTI_FRAME_DEFS, SINGLE_FRAME_DE
 import { Field, Segmented, Slider, Toggle } from './controls';
 import { IconCheck, IconFolder, IconSearch } from './Icons';
 import { cachedFilmThumb, requestFilmThumb, type FilmThumbSource } from '../studio/filmThumbs';
+import { customStyleOf, type ShutterFrameSpec } from '../plate/custom';
 import type { FilterSelection, FrameId, FrameSettings, MediaInfo, MediaKind, PlateMeta } from '../types/studio';
 
 export type SideTab = 'film' | 'frame';
@@ -137,6 +138,9 @@ interface LeftSidebarProps {
   defaultPad: number;
   meta: PlateMeta;
   frameThumbs: Record<string, string>;
+  /** Custom `.shutterframe.json` frames, shown beside the built-in plates. */
+  customFrames: ShutterFrameSpec[];
+  customThumbs: Record<string, string>;
   onPatchFrame: (patch: Partial<FrameSettings>) => void;
   onMeta: (patch: Partial<PlateMeta>) => void;
   onOpenFourCut: () => void;
@@ -434,6 +438,45 @@ export function LeftSidebar(props: LeftSidebarProps) {
                 </button>
               );
             })}
+            {props.customFrames.map((spec) => {
+              const style = customStyleOf(spec);
+              const selected = String(props.frame.style) === style;
+              const url = props.customThumbs[spec.id];
+              return (
+                <button
+                  key={spec.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`side-card frame${selected ? ' on' : ''}`}
+                  onClick={() => props.onPatchFrame({ style: style as FrameId, enabled: true })}
+                  data-frame-id={style}
+                  data-custom-frame={spec.id}
+                  title={`${spec.name} · .shutterframe.json`}
+                >
+                  <span className="side-thumb">
+                    {url ? <img src={url} alt="" draggable={false} /> : <span className="thumb-shimmer" />}
+                    {selected && <span className="side-check"><IconCheck size={12} /></span>}
+                  </span>
+                  <span className="side-text">
+                    <b>{spec.name}</b>
+                    <small>커스텀 · {spec.canvas.width}×{spec.canvas.height}</small>
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="side-card frame side-custom-open"
+              onClick={props.onOpenFourCut}
+              data-testid="side-custom-import"
+            >
+              <span className="side-thumb side-thumb-add">+</span>
+              <span className="side-text">
+                <b>커스텀 프레임</b>
+                <small>.shutterframe.json 불러오기</small>
+              </span>
+            </button>
             {props.thumbsLoading && <p className="side-note" role="status">썸네일을 그리는 중…</p>}
           </div>
         </>

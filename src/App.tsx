@@ -22,6 +22,20 @@ import {
 } from './components/Icons';
 import { initialStudio, sessionOf, studioReducer, type StudioSession } from './state/studio';
 import { loadPlateEngine, type SPEmblemsApi, type SPPlateApi } from './plate/engine';
+import {
+  customSpecs,
+  customStyleOf,
+  customThumb,
+  deleteCustom,
+  isCustomStyle,
+  loadCustomEngine,
+  loadCustomShelf,
+  persistCustom,
+  registerCustomSpec,
+  setActiveFilm,
+  type ShutterFrameSpec,
+} from './plate/custom';
+import { FILM_PROFILES } from './films/registry';
 import { loadPhoto, loadVideo, mountCachedVideo, parkCachedVideo, releaseMedia } from './media/load';
 import { closeAudioPath, openAudioPath, rebindAudioTrack, releaseAudio } from './media/audio';
 import { routeFiles } from './media/route';
@@ -38,6 +52,7 @@ import {
 import { clearWorkspaceThumbs } from './media/workspaceThumbs';
 import { clearFilmThumbs, type FilmThumbSource } from './studio/filmThumbs';
 import { buildFrameThumbs, buildFilterThumbs, type Cancellation } from './studio/thumbnails';
+import { styleLabel } from './studio/render';
 import { PhotoGrader, thumbnailSource } from './studio/grading';
 import { exportMovie, exportStill } from './studio/exporters';
 import { ALL_FILTERS, margarinePreset } from './filters/catalog';
@@ -78,6 +93,8 @@ export default function App() {
   const [stripThumbs, setStripThumbs] = useState<Record<string, string>>({});
   const [frameThumbs, setFrameThumbs] = useState<Record<string, string>>({});
   const [fourCutThumbs, setFourCutThumbs] = useState<Record<string, string>>({});
+  const [customFrames, setCustomFrames] = useState<ShutterFrameSpec[]>([]);
+  const [customThumbs, setCustomThumbs] = useState<Record<string, string>>({});
   const [thumbsLoading, setThumbsLoading] = useState(false);
   const [metaOverride, setMetaOverride] = useState<Partial<PlateMeta>>({});
   const [muted, setMuted] = useState(true);
@@ -171,6 +188,41 @@ export default function App() {
       });
     return () => { alive = false; };
   }, []);
+
+  /* ── custom frames: the shared engine, the shelf, and a #frame= link ────── */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const api = await loadCustomEngine();
+        const rows = await loadCustomShelf();
+        for (const spec of rows) if (spec.overlay) await api.primeOverlay(spec);
+        if (!alive) return;
+        setCustomFrames(customSpecs());
+        const incoming = api.fromUrl(window.location.href);
+        if (!incoming) return;
+        if (incoming.overlay) await api.primeOverlay(incoming);
+        registerCustomSpec(incoming);
+        await persistCustom(incoming);
+        if (!alive) return;
+        setCustomFrames(customSpecs());
+        dispatch({ type: 'set-frame', patch: { style: customStyleOf(incoming) as FrameId, enabled: true } });
+        setNotice(`'${incoming.name}' 커스텀 프레임을 불러왔습니다. 네 칸을 사진으로 채워 주세요.`);
+        if (window.location.hash.includes('frame=') || window.location.search.includes('frame=')) {
+          history.replaceState(null, '', window.location.pathname + window.location.search.replace(/[?&]frame=[^&]*/, ''));
+        }
+      } catch {
+        /* custom frames are an addition: the studio works without them */
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  /* The film the visitor picked fills {{film}} in a custom plate. */
+  useEffect(() => {
+    const profile = FILM_PROFILES[state.grade.filmId as keyof typeof FILM_PROFILES];
+    setActiveFilm(profile?.name ?? '');
+  }, [state.grade.filmId]);
 
   /* ── theme ──────────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -617,10 +669,66 @@ export default function App() {
     buildThumbs(SINGLE_FRAME_DEFS.map((frame) => frame.id), setFrameThumbs);
   }, [buildThumbs]);
 
+  /* ── custom frames: shelf previews, import, delete ──────────────────────── */
+  const buildCustomThumbs = useCallback(() => {
+    if (!customFrames.length || !activeMedia) { setCustomThumbs({}); return; }
+    const slotImages = photos.slice(0, 4).map((item) => ({
+      img: (bank.current.photos.get(item.url) ?? null) as CanvasImageSource | null,
+      w: item.width,
+      h: item.height,
+    }));
+    const next: Record<string, string> = {};
+    customFrames.forEach((spec) => {
+      const url = customThumb(spec, { slots: slotImages, meta: composedMeta, width: 148 });
+      if (url) next[spec.id] = url;
+    });
+    setCustomThumbs(next);
+  }, [customFrames, activeMedia, photos, composedMeta]);
+
+  useEffect(() => { buildCustomThumbs(); }, [buildCustomThumbs]);
+
+  const applyCustomSpec = useCallback(async (spec: ShutterFrameSpec) => {
+    const api = await loadCustomEngine();
+    if (spec.overlay) await api.primeOverlay(spec);
+    registerCustomSpec(spec);
+    await persistCustom(spec);
+    setCustomFrames(customSpecs());
+    dispatch({ type: 'set-frame', patch: { style: customStyleOf(spec) as FrameId, enabled: true } });
+    setNotice(`'${spec.name}' 커스텀 프레임을 불러왔습니다.`);
+    if (!state.media.length) dispatch({ type: 'open-modal', modal: 'fourcut' });
+  }, [state.media.length]);
+
+  const importCustomText = useCallback(async (text: string) => {
+    try {
+      const api = await loadCustomEngine();
+      const spec = api.decode(text) ?? api.parse(text).spec;
+      if (!spec) {
+        setError('프레임을 읽지 못했습니다. .shutterframe.json 파일이나 #frame= 링크인지 확인해 주세요.');
+        return;
+      }
+      await applyCustomSpec(spec);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '프레임을 불러오지 못했습니다.');
+    }
+  }, [applyCustomSpec]);
+
+  const importCustomFile = useCallback(async (file: File) => {
+    const text = await file.text();
+    await importCustomText(text);
+  }, [importCustomText]);
+
+  const removeCustomFrame = useCallback(async (id: string) => {
+    await deleteCustom(id);
+    setCustomFrames(customSpecs());
+    if (state.frame.style === `custom:${id}`) dispatch({ type: 'set-frame', patch: { style: 'fyra04', enabled: true } });
+    setNotice('커스텀 프레임을 삭제했습니다.');
+  }, [state.frame.style]);
+
   const openFourCutModal = useCallback(() => {
     dispatch({ type: 'open-modal', modal: 'fourcut' });
     buildThumbs(['contact', 'fyra04'], setFourCutThumbs);
-  }, [buildThumbs]);
+    buildCustomThumbs();
+  }, [buildThumbs, buildCustomThumbs]);
 
   const closeModal = useCallback(() => {
     if (cancelRef.current) cancelRef.current.cancelled = true;
@@ -940,7 +1048,12 @@ export default function App() {
       thumbs={fourCutThumbs}
       thumbsLoading={thumbsLoading}
       meta={composedMeta}
-      defaultPad={engine ? engine.plate.defaults(state.frame.style).padPct : 4}
+      defaultPad={engine && !isCustomStyle(state.frame.style) ? engine.plate.defaults(state.frame.style).padPct : 4}
+      customFrames={customFrames}
+      customThumbs={customThumbs}
+      onImportCustom={(file) => void importCustomFile(file)}
+      onPasteCustom={(text) => void importCustomText(text)}
+      onDeleteCustom={(id) => void removeCustomFrame(id)}
       busy={busy}
       onPatch={(patch) => dispatch({ type: 'set-frame', patch })}
       onMeta={editMeta}
@@ -1049,8 +1162,10 @@ export default function App() {
     );
   }
 
-  const padDefault = engine.plate.defaults(state.frame.style).padPct;
-  const frameLabel = state.frame.enabled ? FRAME_MAP[state.frame.style].label : '프레임 꺼짐';
+  const padDefault = isCustomStyle(state.frame.style) ? 0 : engine.plate.defaults(state.frame.style).padPct;
+  const frameLabel = state.frame.enabled
+    ? styleLabel(state.frame.style, FRAME_MAP[state.frame.style]?.label ?? '커스텀 프레임')
+    : '프레임 꺼짐';
   const plateSizeLabel = (() => {
     const media = activeMedia;
     if (!media) return '';
@@ -1157,6 +1272,8 @@ export default function App() {
             onPatchFrame={(patch) => dispatch({ type: 'set-frame', patch })}
             onMeta={editMeta}
             onOpenFourCut={openFourCutModal}
+            customFrames={customFrames}
+            customThumbs={customThumbs}
           />
 
           <div className="pc-center">

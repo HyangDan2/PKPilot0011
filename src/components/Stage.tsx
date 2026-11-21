@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PlateLayout, SPEmblemsApi, SPPlateApi } from '../plate/engine';
-import { buildPlateLayout, stageTypeBoost, virtualPhotoBox } from '../studio/render';
+import { buildPlateLayout, paintPlate, stageTypeBoost, virtualPhotoBox } from '../studio/render';
 import { PhotoGrader } from '../studio/grading';
 import { IconVolume, IconVolumeOff } from './Icons';
 import { applyMuted } from '../media/audio';
 import type { FrameSettings, GradeSettings, MediaInfo, PlateMeta, TrimRange } from '../types/studio';
 import { PLATE_BASE_EDGE, PREVIEW_MAX_EDGE, isMultiFrame } from '../types/studio';
+import { isCustomStyle } from '../plate/custom';
 
 export interface MediaBank {
   photos: Map<string, HTMLImageElement>;
@@ -81,7 +82,7 @@ export function Stage(props: StageProps) {
 
   const activeMedia = media[props.activePhoto] ?? media[0] ?? null;
   const video = activeMedia?.kind === 'video' ? bank.video : null;
-  const isMulti = isMultiFrame(frame.style) && activeMedia?.kind === 'photo';
+  const isMulti = (isMultiFrame(frame.style) || isCustomStyle(frame.style)) && activeMedia?.kind === 'photo';
 
   const live = useRef({ grade: props.grade, frame, meta, trim, playing, showOriginal, inputGuard, activeMedia, isMulti });
   live.current = { grade: props.grade, frame, meta, trim, playing, showOriginal, inputGuard, activeMedia, isMulti };
@@ -193,7 +194,7 @@ export function Stage(props: StageProps) {
     // The smallest row the frame prints, as the visitor actually sees it.
     const smallestRow = Math.min(layout.u * 11, layout.band * 0.078);
     canvas.dataset.minTypeCss = (smallestRow * cssScale.current).toFixed(2);
-    plate.paint(ctx, layout);
+    paintPlate(plate, ctx, layout);
   }, [plate, bank, video]);
 
   /**

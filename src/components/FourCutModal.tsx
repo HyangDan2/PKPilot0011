@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { Segmented, Slider, Toggle } from './controls';
 import { Field } from './controls';
 import { FRAME_MAP, FYRA_THEME_LABELS, MULTI_FRAME_DEFS } from '../plate/frames';
 import { IconCheck, IconImage, IconTrash } from './Icons';
+import { MYNDA_URL, customStyleOf, type ShutterFrameSpec } from '../plate/custom';
 import type { FrameId, FrameSettings, MediaInfo, PlateMeta } from '../types/studio';
 
 export interface FourCutModalProps {
@@ -15,11 +16,17 @@ export interface FourCutModalProps {
   meta: PlateMeta;
   defaultPad: number;
   busy: boolean | string;
+  /** Custom `.shutterframe.json` frames on the shared shelf. */
+  customFrames: ShutterFrameSpec[];
+  customThumbs: Record<string, string>;
   onPatch: (patch: Partial<FrameSettings>) => void;
   onMeta: (patch: Partial<PlateMeta>) => void;
   onAddFiles: (files: File[]) => void;
   onReplaceSlot: (index: number, file: File) => void;
   onRemoveSlot: (index: number) => void;
+  onImportCustom: (file: File) => void;
+  onPasteCustom: (text: string) => void;
+  onDeleteCustom: (id: string) => void;
   onApply: () => void;
   onClose: () => void;
 }
@@ -34,9 +41,12 @@ export function FourCutModal(props: FourCutModalProps) {
   const { frame, photos, meta } = props;
   const addInput = useRef<HTMLInputElement | null>(null);
   const replaceInput = useRef<HTMLInputElement | null>(null);
+  const customInput = useRef<HTMLInputElement | null>(null);
   const replaceIndex = useRef<number>(0);
+  const [paste, setPaste] = useState('');
+  const [pasteOpen, setPasteOpen] = useState(false);
   const padValue = frame.padPct ?? props.defaultPad;
-  const isFourCut = frame.style === 'contact' || frame.style === 'fyra04';
+  const isCustom = String(frame.style).startsWith('custom:');
   const slots = Array.from({ length: 4 }, (_, index) => photos[index] ?? null);
 
   const pickReplace = (index: number) => {
@@ -48,7 +58,7 @@ export function FourCutModal(props: FourCutModalProps) {
     <Modal
       kicker="FOUR-CUT"
       title="4컷 프레임"
-      description="네 장을 한 장에 붙이는 두 플레이트입니다. 슬롯을 채우고 적용하면 에디터가 그 프레임으로 전환됩니다."
+      description="네 장을 한 장에 붙이는 두 플레이트와, 직접 만든 커스텀 프레임입니다. 슬롯을 채우고 적용하면 에디터가 그 프레임으로 전환됩니다."
       onClose={props.onClose}
       size="wide"
       testId="fourcut-modal"
@@ -89,8 +99,97 @@ export function FourCutModal(props: FourCutModalProps) {
               </button>
             );
           })}
-          {!isFourCut && <p className="note">아직 4컷 프레임이 선택되지 않았습니다. 카드를 누르면 바로 4컷으로 전환됩니다.</p>}
         </div>
+      </section>
+
+      <section className="filter-section" data-testid="custom-frame-section">
+        <h3 className="section-title">커스텀 프레임 <small>.shutterframe.json</small></h3>
+        <div className="frame-grid fourcut">
+          {props.customFrames.map((spec) => {
+            const style = customStyleOf(spec);
+            const selected = frame.style === style;
+            const url = props.customThumbs[spec.id];
+            return (
+              <div key={spec.id} className={`frame-card-wrap${selected ? ' selected' : ''}`} data-custom-frame={spec.id}>
+                <button
+                  type="button"
+                  className={`frame-card${selected ? ' selected' : ''}`}
+                  onClick={() => props.onPatch({ style: style as FrameId, enabled: true })}
+                  aria-pressed={selected}
+                  data-frame-id={style}
+                >
+                  <span className="frame-thumb">
+                    {url ? <img src={url} alt="" draggable={false} /> : <span className="thumb-shimmer" />}
+                    {selected && <span className="frame-check"><IconCheck size={13} /></span>}
+                  </span>
+                  <span className="frame-name">{spec.name}</span>
+                  <span className="frame-tag">{spec.canvas.width}×{spec.canvas.height}</span>
+                </button>
+                <button
+                  type="button"
+                  className="frame-remove"
+                  aria-label={`${spec.name} 삭제`}
+                  title="보관함에서 삭제"
+                  onClick={() => props.onDeleteCustom(spec.id)}
+                >
+                  <IconTrash size={12} />
+                </button>
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            className="frame-card custom-import"
+            onClick={() => customInput.current?.click()}
+            data-testid="custom-frame-import"
+          >
+            <span className="frame-thumb import-mark">+</span>
+            <span className="frame-name">커스텀 프레임</span>
+            <span className="frame-tag">.shutterframe.json</span>
+          </button>
+        </div>
+        <div className="fourcut-actions custom-actions">
+          <button type="button" className="btn ghost small" onClick={() => setPasteOpen((value) => !value)}>
+            링크 / JSON 붙여넣기
+          </button>
+          <a className="btn ghost small" href={MYNDA_URL} target="_blank" rel="noreferrer" data-testid="mynda-open">
+            Mynda Ljósa로 새 프레임 만들기 ↗
+          </a>
+        </div>
+        {pasteOpen && (
+          <div className="custom-paste">
+            <textarea
+              rows={3}
+              value={paste}
+              onChange={(event) => setPaste(event.target.value)}
+              placeholder="https://hyangdan2.github.io/PKPilot0003/#frame=… 또는 .shutterframe.json 내용"
+              aria-label="커스텀 프레임 링크 또는 JSON"
+            />
+            <button
+              type="button"
+              className="btn primary small"
+              disabled={!paste.trim()}
+              onClick={() => { props.onPasteCustom(paste); setPaste(''); setPasteOpen(false); }}
+            >
+              불러오기
+            </button>
+          </div>
+        )}
+        {props.customFrames.length === 0 && (
+          <p className="note">아직 커스텀 프레임이 없습니다. Mynda Ljósa에서 만들거나, 파일·링크로 불러오세요.</p>
+        )}
+        <input
+          ref={customInput}
+          type="file"
+          accept=".json,application/json,*/*"
+          hidden
+          data-testid="custom-frame-file"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) props.onImportCustom(file);
+            event.target.value = '';
+          }}
+        />
       </section>
 
       <section className="filter-section">
@@ -144,6 +243,10 @@ export function FourCutModal(props: FourCutModalProps) {
             onChange={(value) => props.onPatch({ fyraTheme: value })}
           />
         )}
+        {isCustom ? (
+          <p className="note">여백 · 엠블럼 · 텍스트는 Mynda Ljósa에서 디자인한 그대로 인화됩니다.</p>
+        ) : (
+        <>
         <Slider
           label="여백"
           value={padValue}
@@ -178,6 +281,8 @@ export function FourCutModal(props: FourCutModalProps) {
           <Toggle label="촬영 정보" hint="카메라 · 렌즈 · 노출" checked={frame.showSpec} onChange={(value) => props.onPatch({ showSpec: value })} />
           <Toggle label="캡션" hint="직접 쓴 한 줄" checked={frame.showCaption} onChange={(value) => props.onPatch({ showCaption: value })} />
         </div>
+        </>
+        )}
         <div className="meta-grid">
           <Field label="촬영일">
             <input value={meta.datetime} onChange={(event) => props.onMeta({ datetime: event.target.value })} placeholder="2026-11-19 18:04:31" />

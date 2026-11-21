@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  IconApps, IconDots, IconExternal, IconHome, IconImage, IconRefresh, IconStamp, IconTrash, IconVideo,
+  IconApps, IconDots, IconExternal, IconFrame, IconHome, IconImage, IconRefresh, IconStamp, IconTrash, IconVideo,
 } from './Icons';
 import type { SampleItem } from './Landing';
 
@@ -143,6 +143,8 @@ export function NavMenu(props: NavMenuProps) {
           <p className="portal-menu-head">NAVIGATION</p>
           <Link icon={<IconHome size={15} />} title="HD2Lab Web-HQ" hint="Main Portal" href="https://hyangdan2.github.io/" />
           <Link icon={<IconApps size={15} />} title="ApplicationHub" hint="Apps Catalog" href="https://hyangdan2.github.io/ApplicationHub/" />
+          <Link icon={<IconImage size={15} />} title="Shutterplate" hint="EXIF & 4컷 인화 스튜디오" href="https://hyangdan2.github.io/PKPilot0003/" />
+          <Link icon={<IconFrame size={15} />} title="Mynda Ljósa" hint="커스텀 4컷 프레임 에디터" href="https://hyangdan2.github.io/PKPilot0015/" />
           <span className="sr-only"><IconExternal size={1} /></span>
         </div>
       )}

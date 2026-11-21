@@ -1,7 +1,7 @@
 import { gradeForFilter, type FilterOption } from '../filters/catalog';
 import type { SPEmblemsApi, SPPlateApi } from '../plate/engine';
 import type { FrameSettings, FrameId, PlateMeta } from '../types/studio';
-import { buildPlateLayout } from './render';
+import { buildPlateLayout, paintPlate } from './render';
 import { PhotoGrader } from './grading';
 
 export interface Cancellation {
@@ -91,7 +91,7 @@ export async function buildFrameThumbs(options: {
       canvas.height = Math.max(1, Math.round(layout.H));
       const ctx = canvas.getContext('2d');
       if (!ctx) continue;
-      plate.paint(ctx, layout);
+      paintPlate(plate, ctx, layout);
       if (!token.cancelled) onEach(id, canvas.toDataURL('image/jpeg', 0.85));
     } catch {
       /* skip a broken miniature */
