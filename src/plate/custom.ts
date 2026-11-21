@@ -155,6 +155,15 @@ export function setActiveFilm(label: string): void {
   activeFilm = label || '';
 }
 
+/**
+ * The plate's own vocabulary prints "ISO 100" and "ƒ/1.8"; a frame's
+ * `ISO {{iso}}` and `f/{{aperture}}` already carry those words, so the bare
+ * numbers go in and the duplication stays out.
+ */
+function bare(value: string | undefined, prefixes: RegExp): string {
+  return String(value ?? '').replace(prefixes, '').trim();
+}
+
 export function customFields(meta: Partial<PlateMeta>, film?: string): Record<string, string> {
   const camera = [meta.make, meta.model].filter(Boolean).join(' ');
   return {
@@ -165,8 +174,8 @@ export function customFields(meta: Partial<PlateMeta>, film?: string): Record<st
     datetime: meta.datetime ?? '',
     caption: meta.caption ?? '',
     shutter: meta.shutter ?? '',
-    iso: meta.iso ?? '',
-    aperture: meta.aperture ?? '',
+    iso: bare(meta.iso, /^iso\s*/i),
+    aperture: bare(meta.aperture, /^(ƒ|f)\/?/i),
     title: '',
   };
 }
