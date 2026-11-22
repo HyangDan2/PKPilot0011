@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createMonotoneSpline } from '../engine/color/toneCurve';
+import { createMonotoneSpline, curveIsIdentity } from '../engine/color/toneCurve';
 import {
   CURVE_CHANNELS,
   CURVE_MIN_GAP,
@@ -28,15 +28,14 @@ const BOX = 256;
 const PAD = 8;
 const VIEW = BOX + PAD * 2;
 
-/** True when any channel has left the identity line — the button badge reads this. */
+/** The buttons that toggle the overlay themselves — a press on one must not
+ *  also be read as a press outside that closes it, or the press would close and
+ *  the button's own toggle would open it straight back up. */
+const TOGGLE_SELECTOR = '[data-testid="tonecurve-fab"], [data-testid="side-tonecurve"]';
+
+/** True when any channel is doing something — the button badge reads this. */
 export function curvesTouched(curves: ToneCurves): boolean {
-  const identity = identityPoints();
-  return CURVE_CHANNELS.some((channel) => {
-    const points = curves[channel];
-    if (points.length !== 2) return true;
-    return points[0][0] !== identity[0][0] || points[0][1] !== identity[0][1]
-      || points[1][0] !== identity[1][0] || points[1][1] !== identity[1][1];
-  });
+  return CURVE_CHANNELS.some((channel) => !curveIsIdentity(curves[channel] ?? []));
 }
 
 interface ToneCurveOverlayProps {
@@ -60,6 +59,9 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
   const [selected, setSelected] = useState(1);
   const drag = useRef<number | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const overlayRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const points = curves[channel];
   const index = Math.min(Math.max(0, selected), points.length - 1);
@@ -71,24 +73,51 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, []);
+
+  // A press anywhere off the overlay closes it — the stage behind it, the
+  // utility bar, the page around the stage. The press is caught in the capture
+  // phase so the stage's own long-press compare and double-click play never get
+  // to act on it first; a press on the overlay itself, or on either of the two
+  // buttons that toggle the curve, is left to them. The fab still opens and
+  // closes on one tap because its toggle runs after this closes, and the guard
+  // above keeps the two from firing against each other.
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      if (overlayRef.current?.contains(target)) return;
+      if (target.closest(TOGGLE_SELECTOR)) return;
+      onCloseRef.current();
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, []);
 
   // A channel that loses points must not leave the selection past its end.
   useEffect(() => {
     if (selected > points.length - 1) setSelected(Math.max(0, points.length - 1));
   }, [points.length, selected]);
 
+  // The end points may sit off 0 and 1 now, so the graph is drawn the way the
+  // picture is graded: a flat run up to the first point, the spline between the
+  // points, then a flat run out to white.
   const spline = createMonotoneSpline(points);
-  let path = `M0,${BOX}`;
+  const first = points[0] ?? [0, 0];
+  const last = points[points.length - 1] ?? [1, 1];
+  const xBox = (value: number) => (Math.max(0, Math.min(1, value)) * BOX).toFixed(2);
+  const yBox = (value: number) => (BOX - Math.max(0, Math.min(1, value)) * BOX).toFixed(2);
+  let path = `M0,${yBox(first[1])} L${xBox(first[0])},${yBox(first[1])}`;
   for (let i = 1; i <= 128; i += 1) {
-    const x = i / 128;
-    path += ` L${(x * BOX).toFixed(2)},${(BOX - Math.max(0, Math.min(1, spline(x))) * BOX).toFixed(2)}`;
+    const x = first[0] + (last[0] - first[0]) * (i / 128);
+    path += ` L${xBox(x)},${yBox(spline(x))}`;
   }
+  path += ` L${xBox(last[0])},${yBox(last[1])} L${BOX},${yBox(last[1])}`;
 
   /** Client point → curve coordinates (0..1 on both axes, y up). */
   const toCurve = useCallback((clientX: number, clientY: number): CurvePoint => {
@@ -116,10 +145,10 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
   };
 
   const move = (i: number, x: number, y: number) => {
-    // The two ends keep their input: a curve that no longer starts at 0 or ends
-    // at 1 leaves the darkest and brightest tones ungraded.
-    const locked = i === 0 ? 0 : i === points.length - 1 ? 1 : x;
-    setPoints(moveCurvePoint(points, i, locked, y));
+    // Both ends move along the input axis too: pulling the black point right or
+    // the white point left is how a curve is clipped, and `moveCurvePoint`
+    // keeps the order and the minimum gap while doing it.
+    setPoints(moveCurvePoint(points, i, x, y));
   };
 
   const remove = () => {
@@ -131,6 +160,7 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
   return (
     <section
       id="tone-curve-overlay"
+      ref={overlayRef}
       data-testid="tonecurve-overlay"
       className="tonecurve-overlay"
       role="group"
@@ -152,7 +182,7 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
             title="닫기"
             onClick={onClose}
           >
-            <IconClose size={14} />
+            <IconClose size={18} />
           </button>
         </div>
         <div className="tonecurve-tools">
@@ -216,12 +246,13 @@ export function ToneCurveOverlay({ curves, onCurves, onClose }: ToneCurveOverlay
         }}
         onPointerUp={(event) => {
           event.stopPropagation();
-          if (drag.current === null) return;
+          const dragged = drag.current;
+          if (dragged === null) return;
           drag.current = null;
           try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already gone */ }
           // One more pass at the settled position, so the release is the value.
           const [x, y] = toCurve(event.clientX, event.clientY);
-          move(Math.min(Math.max(0, selected), points.length - 1), x, y);
+          move(dragged, x, y);
         }}
         onPointerCancel={() => { drag.current = null; }}
       >

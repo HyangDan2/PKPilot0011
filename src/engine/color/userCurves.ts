@@ -1,5 +1,5 @@
-import { CURVE_CHANNELS, ToneCurves, normalizeCurves, isIdentityCurve } from '../../types/curves';
-import { createMonotoneSpline } from './toneCurve';
+import { CURVE_CHANNELS, ToneCurves, normalizeCurves } from '../../types/curves';
+import { createMonotoneSpline, curveIsIdentity } from './toneCurve';
 export const CURVE_SAMPLES = 1024;
 export function buildCurveTexture(curves?: ToneCurves): { data: Float32Array; enabled: boolean } {
   const normalized = normalizeCurves(curves);
@@ -8,7 +8,9 @@ export function buildCurveTexture(curves?: ToneCurves): { data: Float32Array; en
     const sample = createMonotoneSpline(normalized[channel]);
     for (let i=0;i<CURVE_SAMPLES;i++) data[i*4+c] = sample(i/(CURVE_SAMPLES-1));
   });
-  return { data, enabled: CURVE_CHANNELS.some(c => !isIdentityCurve(normalized[c])) };
+  // The same reading the on-screen badge uses, so the shader path and the
+  // badge never disagree about whether a curve is doing anything.
+  return { data, enabled: CURVE_CHANNELS.some(c => !curveIsIdentity(normalized[c])) };
 }
 export function histogramFromPixels(pixels: Uint8ClampedArray) {
   const bins = Array.from({length:4},()=>Array(64).fill(0) as number[]);
