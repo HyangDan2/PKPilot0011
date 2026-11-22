@@ -25,7 +25,7 @@ const WORKSPACE_FILES = [
  * `Trip/day2` gives the 하위 폴더 포함 switch something to include.
  */
 function makeWorkspaceFolder(): string {
-  const root = mkdtempSync(resolve(tmpdir(), 'nordlys-ws-'));
+  const root = mkdtempSync(resolve(tmpdir(), 'cineplate-ws-'));
   const folder = resolve(root, 'Trip');
   mkdirSync(resolve(folder, 'day2'), { recursive: true });
   for (const path of WORKSPACE_FILES) copyFileSync(path, resolve(folder, basename(path)));
@@ -78,7 +78,7 @@ test('pc: the landing opens the two-door window, and a file fills the studio', a
   await expect(page.locator('[data-testid="open-workspace-card"]')).toContainText('워크스페이스');
   await expect(page.locator('[data-testid="include-subfolders"]')).toBeChecked();
   await page.waitForTimeout(350);
-  await shot(page, 'nordlys-open-modal.png');
+  await shot(page, 'cineplate-open-modal.png');
 
   await page.locator('[data-testid="open-file-input"]').setInputFiles([sample('sample-01.jpg')]);
   await expect(page.locator('[data-testid="open-modal"]')).toHaveCount(0);
@@ -202,7 +202,7 @@ test('pc: a folder becomes a workspace of stills and clips, each with its own se
   await expect(page.locator('[data-testid="pc-transport"]')).toHaveCount(0);
   await waitForPlate(page);
   await page.waitForTimeout(900);
-  await shot(page, 'nordlys-pc-ui-workspace.png');
+  await shot(page, 'cineplate-pc-ui-workspace.png');
 
   // 하위 폴더 포함 brings the nested still into the same shelf.
   await page.locator('[data-testid="workspace-strip"] .ws-tools button').filter({ hasText: '+ 폴더' }).click();
@@ -272,7 +272,7 @@ test('pc: 저장 / 공유 sits beside 교체 and opens the export sheet', async 
   await page.locator('[data-testid="topbar-save"]').click();
   await expect(page.locator('[data-testid="export-modal"]')).toBeVisible();
   await page.waitForTimeout(400);
-  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys-pc-export.png') });
+  await page.screenshot({ path: resolve(SHOT_DIR, 'cineplate-pc-export.png') });
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="export-modal"]')).toHaveCount(0);
 
@@ -313,7 +313,7 @@ test('mobile: 390×844 keeps the dock, the strip and the utility bar', async ({ 
   await page.keyboard.press('Escape');
 
   await page.waitForTimeout(600);
-  await shot(page, 'nordlys-mobile-keep.png');
+  await shot(page, 'cineplate-mobile-keep.png');
   await expectNoOverflow(page, 390);
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });

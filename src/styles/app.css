@@ -88,7 +88,7 @@ img { display: block; max-width: 100%; }
 }
 
 /* ── brand: the HD2Lab Web-HQ lockup, exactly as Shutterplate draws it ─────
-   [dual-skew mark] HD2Lab | Nordlys — no card, no pill, a title that happens
+   [dual-skew mark] HD2Lab | CinePlate — no card, no pill, a title that happens
    to be a button because it goes home. */
 .brand {
   display: inline-flex; align-items: center; gap: 12px;
@@ -894,7 +894,7 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border-radius
 }
 
 /* A phone keeps one door on the bar:
-   [mark] HD2Lab | Nordlys [STUDIO] … [열기] [⋮] — one row, never two. */
+   [mark] HD2Lab | CinePlate [STUDIO] … [열기] [⋮] — one row, never two. */
 @media (max-width: 519px) {
   .landing-top .open-chip { width: 36px; height: 36px; padding: 0; justify-content: center; }
   .landing-top .open-chip .chip-label { display: none; }

@@ -1,8 +1,8 @@
-# Nordlys — HD2Lab Film & Frame Studio
+# CinePlate — HD2Lab Film & Frame Studio
 
 **한 장의 사진도, 움직이는 클립도 하나의 플레이트로.**
 
-`Nordlys`는 HD2Lab의 사진 색보정 스튜디오(Film Studio)와 프레임 인화 엔진(Shutterplate)을
+`CinePlate`는 HD2Lab의 사진 색보정 스튜디오(Film Studio)와 프레임 인화 엔진(Shutterplate)을
 하나로 합친 브라우저 로컬 스튜디오입니다. 사진과 영상을 같은 스테이지에 올리고, 하단 **필름
 스트립**이나 **필터 모달**로 색을, **프레임 모달**·**4컷 창**으로 판면을 즉시 바꾼 뒤,
 원본 1:1 사진 또는 H.264 + 사운드 영상으로 **한 번의 [저장 / 공유]** 로 내보냅니다.
@@ -43,7 +43,7 @@
   소리가 나지 않습니다. 그래서 [소리 켜기] 탭 안에서 `preload='auto'` → `AudioContext.resume()` →
   `MediaElementAudioSourceNode → GainNode → AnalyserNode` 라우팅 → 같은 프레임에서 pause/play
   재바인딩을 차례로 수행합니다(`src/media/audio.ts`). 오디오 트랙이 없는 영상은 버튼이
-  `오디오 없음`(비활성)으로 표시되고, 분석기 RMS는 `window.__nordlysAudio`로 노출됩니다.
+  `오디오 없음`(비활성)으로 표시되고, 분석기 RMS는 `window.__cineplateAudio`로 노출됩니다.
 
 ### 13 프레임
 
@@ -68,7 +68,7 @@
   **Color Lab**(8대역 HSL · Color Focus · RGB Base) · **Tone Curve**(W/R/G/B 스플라인) ·
   **Camera Effects**(날짜 각인 · 광학 효과) — 뒤 세 도구 중 Color Lab·Camera Effects는 창으로,
   **Tone Curve는 스테이지 위 투명 오버레이**로 뜹니다(그래프 뒤로 그레이딩된 판면이 그대로 비침).
-- **타이틀 락업** — Shutterplate(Web-HQ) 규약 그대로 `[듀얼 스큐 CSS 마크] HD2Lab | Nordlys`.
+- **타이틀 락업** — Shutterplate(Web-HQ) 규약 그대로 `[듀얼 스큐 CSS 마크] HD2Lab | CinePlate`.
   에디터 상단바와 랜딩 상단이 같은 규격(마크 17×22 · 테두리 3px · `skewY(-23deg)`, 워드마크 25px/800).
   배경 라이트/다크 슬라이드는 상단바 우측 `교체` 바로 왼쪽에 있습니다.
 - **⋮ 내비게이션 메뉴** — WORKSPACE(홈 · 교체 · EXIF 되돌리기 · 비우기 · 엠블럼 색상),
@@ -127,7 +127,7 @@ src/
 public/
   favicon.ico · favicon.svg · favicon-32x32.png · apple-touch-icon.png · icon-192/512.png
                           HD2Lab 듀얼 스큐 마크(Soft Iris) 아이콘 세트 — brand/ 에도 같은 사본
-  manifest.json           PWA 매니페스트 (HD2Lab Nordlys · standalone · #0B1020)
+  manifest.json           PWA 매니페스트 (HD2Lab CinePlate · standalone · #0B1020)
   og-image.png · social-preview.png   1200×630 링크 카드
   plate/                  검증된 Shutterplate 엔진(plate.js, emblems.js) — 그대로 이식
   luts/                   FS-001~010 + identity .cube
@@ -150,13 +150,13 @@ tools/generate_brand_assets.py  아이콘 세트 · manifest · OG 카드 재생
 
 - 링크 카드(`og-image.png` 1200×630)는 Shutterplate(`PKPilot0003`)의 카드 레이아웃 — Soft Iris
   격자 바탕, 흰 컨테이너 카드, 키커 + 개인정보 표식, 듀얼 스큐 락업, 두 줄 헤드라인, 타일 3개,
-  푸터 레일 — 을 그대로 계승하고 내용만 Nordlys의 것으로 바꿨습니다.
+  푸터 레일 — 을 그대로 계승하고 내용만 CinePlate의 것으로 바꿨습니다.
 - 아이콘은 사이트 헤더·판면과 같은 듀얼 스큐 마크를 SVG로 그려 16/32/48 ICO와 180/192/512 PNG로
   래스터화합니다. 그래서 파비콘과 OG 카드의 마크가 같은 획입니다.
 - 다시 만들 때: `python3 tools/generate_brand_assets.py` (한글 폰트는 `--font`로 지정 가능).
   스크립트가 `public/` 루트와 `public/brand/` 사본, `manifest.json`까지 함께 씁니다.
-- `index.html`의 모든 아이콘 URL에는 `?v=20261120-nordlys`, OG·트위터 카드 URL에는
-  `?v=20261120-nordlys2` 버전 쿼리가 붙어 있어, 자산을 다시 만들면 해당 값만 올리면
+- `index.html`의 모든 아이콘 URL에는 `?v=20261122-rename`, OG·트위터 카드 URL에는
+  `?v=20261122-rename` 버전 쿼리가 붙어 있어, 자산을 다시 만들면 해당 값만 올리면
   브라우저·스크래퍼 캐시가 갈립니다.
 
 ## 테스트

@@ -15,8 +15,8 @@ import {
 
 const sample = {
   schema: 'shutterframe/v1',
-  id: 'frame-nordlys-test',
-  name: 'Nordlys Test Strip',
+  id: 'frame-cineplate-test',
+  name: 'CinePlate Test Strip',
   updatedAt: '2026-11-21T00:00:00.000Z',
   canvas: { width: 600, height: 1800, background: '#121110', light: false },
   perforation: { enabled: true, style: 'side', color: '#efe9dc', holeWidth: 16, holeHeight: 12, gap: 26 },
@@ -39,8 +39,8 @@ beforeAll(() => {
 
 describe('custom frame registry', () => {
   it('names a style with the custom: prefix', () => {
-    expect(customStyleOf(sample as never)).toBe(`${CUSTOM_PREFIX}frame-nordlys-test`);
-    expect(isCustomStyle('custom:frame-nordlys-test')).toBe(true);
+    expect(customStyleOf(sample as never)).toBe(`${CUSTOM_PREFIX}frame-cineplate-test`);
+    expect(isCustomStyle('custom:frame-cineplate-test')).toBe(true);
     expect(isCustomStyle('fyra04')).toBe(false);
     expect(isCustomStyle(null)).toBe(false);
   });
@@ -48,7 +48,7 @@ describe('custom frame registry', () => {
   it('validates, registers and resolves the spec', () => {
     const spec = registerCustomSpec(sample);
     expect(spec).not.toBeNull();
-    expect(specForStyle(customStyleOf(spec!))?.name).toBe('Nordlys Test Strip');
+    expect(specForStyle(customStyleOf(spec!))?.name).toBe('CinePlate Test Strip');
     expect(customSpecs().some((item) => item.id === sample.id)).toBe(true);
   });
 
@@ -83,15 +83,15 @@ describe('custom plate layout', () => {
 
 describe('film-aware variables', () => {
   it('fills camera and the selected film name', () => {
-    setActiveFilm('Nordlys 400');
+    setActiveFilm('CinePlate 400');
     const fields = customFields({ make: 'Leica', model: 'M6', lens: 'Summicron', iso: '400' });
     expect(fields.camera).toBe('Leica M6');
-    expect(fields.film).toBe('Nordlys 400');
+    expect(fields.film).toBe('CinePlate 400');
     expect(fields.iso).toBe('400');
   });
 
   it('lets an explicit film win over the session film', () => {
-    setActiveFilm('Nordlys 400');
+    setActiveFilm('CinePlate 400');
     expect(customFields({}, 'VAERN').film).toBe('VAERN');
   });
 });

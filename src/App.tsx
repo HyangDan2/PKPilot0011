@@ -1200,17 +1200,17 @@ export default function App() {
   return (
     <div className={`app${isPC ? ' is-pc' : ''}`}>
       <header className="topbar">
-        {/* The Web-HQ lockup every HD2Lab title carries: [mark] HD2Lab | Nordlys. */}
+        {/* The Web-HQ lockup every HD2Lab title carries: [mark] HD2Lab | CinePlate. */}
         <button
           type="button"
           className="brand"
           onClick={() => setView('landing')}
-          aria-label="Nordlys 홈으로 이동"
-          title="Nordlys 홈 — 랜딩 화면"
+          aria-label="CinePlate 홈으로 이동"
+          title="CinePlate 홈 — 랜딩 화면"
         >
           <span className="mark" aria-hidden />
           <span className="brand-name">HD2Lab</span>
-          <em>Nordlys</em>
+          <em>CinePlate</em>
         </button>
 
         <div className="topbar-actions">

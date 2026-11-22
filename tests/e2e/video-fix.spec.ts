@@ -104,7 +104,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   const idle = await plateSample(page);
   const idleTime = await page.evaluate(() => (document.querySelector('video.source-video') as HTMLVideoElement).currentTime);
   process.stdout.write(`[idle] colours=${idle.colours} t=${idleTime}\n`);
-  await shot(page, 'nordlys_video_fix_idle.png');
+  await shot(page, 'cineplate_video_fix_idle.png');
 
   // ── 4. playing moves both the clock and the pixels ──
   await play.click();
@@ -118,7 +118,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   expect(second).toBeGreaterThan(first + 0.2);
   expect(moving.colours).toBeGreaterThan(24);
   expect(moving.checksum).not.toBe(idle.checksum);
-  await shot(page, 'nordlys_video_fix_playing.png');
+  await shot(page, 'cineplate_video_fix_playing.png');
 
   // ── 5. sound: the transport starts the clip with sound, and the analyser
   //       proves real PCM is flowing — not just that a flag flipped ──
@@ -134,7 +134,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
       volume: video.volume,
       paused: video.paused,
       preload: video.preload,
-      audio: window.__nordlysAudio ?? null,
+      audio: window.__cineplateAudio ?? null,
     };
   });
   process.stdout.write(`[sound] ${JSON.stringify(liveAudio)}\n`);
@@ -145,7 +145,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   expect(liveAudio.audio?.routed).toBe(true);
   // The element is routed through MediaElementAudioSourceNode → Gain → Analyser:
   // a non-zero RMS here is sound leaving the graph, not a UI state.
-  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+  await expect.poll(async () => page.evaluate(() => window.__cineplateAudio?.rms ?? 0), {
     message: 'the analyser should see the sample bed', timeout: 10_000,
   }).toBeGreaterThan(0.01);
 
@@ -156,7 +156,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   })).toBe(true);
   await expect(page.locator('[data-testid="mute-toggle"]')).toHaveText(/소리 켜기/);
   await expect(page.locator('[data-testid="mute-toggle"]')).toHaveAttribute('aria-label', '소리 켜기');
-  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 1), {
+  await expect.poll(async () => page.evaluate(() => window.__cineplateAudio?.rms ?? 1), {
     message: 'silenced graph', timeout: 10_000,
   }).toBeLessThan(0.02);
 
@@ -167,7 +167,7 @@ test('video: opens on metadata, decodes in the page, and keeps a live plate', as
   })).toBe(false);
   await expect(page.locator('[data-testid="mute-toggle"]')).toHaveText(/소리 켜짐/);
   await expect(page.locator('[data-testid="mute-toggle"]')).toHaveAttribute('aria-label', '음소거');
-  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+  await expect.poll(async () => page.evaluate(() => window.__cineplateAudio?.rms ?? 0), {
     message: 'the graph should pass sound again', timeout: 10_000,
   }).toBeGreaterThan(0.01);
 
@@ -227,7 +227,7 @@ test('wide 1000×800: the ⋮ menu opens above the corner tools', async ({ page 
   process.stdout.write(`[menu] hit ${JSON.stringify(hit)}\n`);
   expect(hit.inMenu, `the menu is under ${hit.testId ?? hit.tag} there`).toBe(true);
 
-  await shot(page, 'nordlys_nav_menu_over_stage.png');
+  await shot(page, 'cineplate_nav_menu_over_stage.png');
   expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
 });
 
@@ -279,7 +279,7 @@ test('mobile 390×844: the sound toggle answers the tap, never the long press', 
       paused: video.paused,
       preload: video.preload,
       top: Math.round(button.getBoundingClientRect().top),
-      audio: window.__nordlysAudio ?? null,
+      audio: window.__cineplateAudio ?? null,
     };
   });
   process.stdout.write(`[mobile sound] ${JSON.stringify(live)}\n`);
@@ -289,7 +289,7 @@ test('mobile 390×844: the sound toggle answers the tap, never the long press', 
   expect(live.preload).toBe('auto');
   expect(live.audio?.context).toBe('running');
   expect(live.audio?.routed).toBe(true);
-  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+  await expect.poll(async () => page.evaluate(() => window.__cineplateAudio?.rms ?? 0), {
     message: 'the phone tap should put real PCM through the graph', timeout: 10_000,
   }).toBeGreaterThan(0.01);
 
@@ -332,7 +332,7 @@ test('mobile 390×844: the sound toggle answers the tap, never the long press', 
   const headerSkew = Number((header.mark.skew.match(/matrix\(([^)]+)\)/) || ['', ''])[1].split(',')[1]);
   expect(Math.atan(headerSkew) * 180 / Math.PI).toBeCloseTo(-23, 1);
 
-  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_audio_fix_mobile.png') });
+  await page.screenshot({ path: resolve(SHOT_DIR, 'cineplate_audio_fix_mobile.png') });
   expect(errors.errors, errors.errors.join(' | ')).toEqual([]);
 });
 
@@ -410,7 +410,7 @@ test('mobile 390×844: the tone curve floats over the print', async ({ page }) =
   await expect(page.locator('.tonecurve-title')).toHaveText(/RGB|R/);
   await expect(page.locator('[data-testid="tonecurve-overlay"] [data-channel="red"]')).toHaveAttribute('aria-pressed', 'true');
 
-  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_tonecurve_overlay_mobile.png') });
+  await page.screenshot({ path: resolve(SHOT_DIR, 'cineplate_tonecurve_overlay_mobile.png') });
 
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="tonecurve-overlay"]')).toHaveCount(0);

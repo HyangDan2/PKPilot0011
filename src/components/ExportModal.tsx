@@ -109,7 +109,7 @@ export function ExportModal(props: ExportModalProps) {
     if (!prepared) return;
     setSavedMessage(null);
     const shareable = canShareFile(prepared.file);
-    shareFile(prepared.file, 'Nordlys');
+    shareFile(prepared.file, 'CinePlate');
     setSavedMessage(shareable
       ? `${prepared.filename} — 공유 시트에서 저장하거나 보내세요.`
       : `${prepared.filename} 파일로 저장했습니다.`);

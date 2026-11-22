@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-PKPilot0011 · Nordlys — HD2Lab brand asset generator (Soft Iris)
+PKPilot0011 · CinePlate — HD2Lab brand asset generator (Soft Iris)
 ==============================================================
-Produces the official HD2Lab asset set for Nordlys, out of the same
+Produces the official HD2Lab asset set for CinePlate, out of the same
 dual-skew mark the app header and the plate emblems use:
 
     favicon.svg, favicon.ico(16/32/48), favicon-32x32.png,
@@ -13,7 +13,7 @@ dual-skew mark the app header and the plate emblems use:
 The OG card inherits the Shutterplate (PKPilot0003) card layout — Soft Iris
 grid backdrop, white container card, kicker + privacy mark, dual-skew lockup,
 two-line headline, two lines of sub copy, three tiles and a footer rail —
-and fills it with Nordlys content (Film Studio × Shutterplate).
+and fills it with CinePlate content (Film Studio × Shutterplate).
 
     python3 tools/generate_brand_assets.py [--font PATH] [--out DIR]
 """
@@ -153,8 +153,8 @@ def build_icons(out_dir: str):
 
 # ── manifest ────────────────────────────────────────────────────────────────
 MANIFEST = {
-    "name": "HD2Lab Nordlys",
-    "short_name": "Nordlys",
+    "name": "HD2Lab CinePlate",
+    "short_name": "CinePlate",
     "description": "사진과 영상에 HD2Lab 필름 9종·RETRO 90·Margarine 58종을 입히고, "
                    "Shutterplate 13종 프레임과 합성해 원본 1:1 사진 또는 H.264 + 사운드 "
                    "영상으로 내보내는 브라우저 로컬 스튜디오.",
@@ -213,11 +213,11 @@ def build_og(out_dir: str) -> str:
     # 2) kicker + privacy mark
     r = 5 * S
     d.ellipse((104 * S - r, 90 * S - r, 104 * S + r, 90 * S + r), fill=PURPLE)
-    spaced(d, (124 * S, 96 * S), "04 / STUDIO · NORDLYS",
+    spaced(d, (124 * S, 96 * S), "04 / STUDIO · CINEPLATE",
            font(14 * S, "Medium"), MUTED, spacing=2.2 * S)
     d.text((1096 * S, 96 * S), "LOCAL ONLY · 0 B UPLOAD", font=mono(13 * S), fill=DIM, anchor="rs")
 
-    # 3) dual-skew mark + HD2Lab | Nordlys
+    # 3) dual-skew mark + HD2Lab | CinePlate
     mark = render_mark(100 * S)
     img.paste(mark, (84 * S, 120 * S), mark)
 
@@ -227,7 +227,7 @@ def build_og(out_dir: str) -> str:
     pipe_x = 224 * S + d.textlength("HD2Lab", font=f_title) + 18 * S
     d.line([(pipe_x, (base_y - 40) * S), (pipe_x, (base_y + 2) * S)],
            fill="#D9D2EE", width=int(2.5 * S))
-    d.text((pipe_x + 20 * S, base_y * S), "Nordlys", font=f_title, fill=PURPLE, anchor="ls")
+    d.text((pipe_x + 20 * S, base_y * S), "CinePlate", font=f_title, fill=PURPLE, anchor="ls")
 
     # 4) headline + sub copy
     f_head = font(48 * S, "Bold")
@@ -270,7 +270,7 @@ def build_og(out_dir: str) -> str:
 
     # 6) footer rail
     d.line([(104 * S, 566 * S), (1096 * S, 566 * S)], fill=LINE, width=int(1 * S))
-    spaced(d, (104 * S, 588 * S), "FILM STUDIO × SHUTTERPLATE · NORDLYS",
+    spaced(d, (104 * S, 588 * S), "FILM STUDIO × SHUTTERPLATE · CINEPLATE",
            font(11.5 * S, "Medium"), MUTED, spacing=1.5 * S)
     d.text((1096 * S, 588 * S), "hyangdan2.github.io/PKPilot0011", font=mono(11.5 * S),
            fill=DIM, anchor="rs")
@@ -284,7 +284,7 @@ def build_og(out_dir: str) -> str:
 
 def main() -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="PKPilot0011 (Nordlys) 브랜드 에셋 생성")
+    ap = argparse.ArgumentParser(description="PKPilot0011 (CinePlate) 브랜드 에셋 생성")
     ap.add_argument("--font")
     ap.add_argument("--out", default=os.path.join(ROOT, "public"))
     args = ap.parse_args()

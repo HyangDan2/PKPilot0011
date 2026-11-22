@@ -2,7 +2,7 @@
  * HD2Lab ShutterFrame v1 — the shared custom 4-cut frame engine.
  *
  * One plain script, loaded as a classic <script> by Mynda Ljósa (PKPilot0015),
- * Shutterplate (PKPilot0003) and Nordlys (PKPilot0011), so all three read the
+ * Shutterplate (PKPilot0003) and CinePlate (PKPilot0011), so all three read the
  * same `.shutterframe.json` byte for byte: one validator, one painter, one
  * lz-string share codec and one IndexedDB shelf.
  *

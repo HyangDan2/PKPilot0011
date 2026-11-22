@@ -120,8 +120,8 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1000, height: 800 
     await playback.click({ force: true }).catch(() => undefined);
     await expect(page.locator('[data-testid="playback-overlay"]')).toHaveCount(0);
 
-    if (viewport.width < 820) await shot(page, 'nordlys_v4_mobile_photo.png');
-    else await shot(page, 'nordlys_v4_desktop.png');
+    if (viewport.width < 820) await shot(page, 'cineplate_v4_mobile_photo.png');
+    else await shot(page, 'cineplate_v4_desktop.png');
   });
 }
 
@@ -147,7 +147,7 @@ test('frame off: the picture alone on the stage, and every choice comes back', a
   await expect(toggle).toHaveAttribute('data-checked', 'true');
   await expect(page.locator('[data-testid="frame-modal"] .frame-enable')).toContainText('프레임 사용');
   await page.waitForTimeout(500);
-  await shot(page, 'nordlys_v4_frame_modal.png');
+  await shot(page, 'cineplate_v4_frame_modal.png');
 
   await toggle.click();
   await expect(toggle).toHaveAttribute('data-checked', 'false');
@@ -179,7 +179,7 @@ test('frame off: the picture alone on the stage, and every choice comes back', a
   expect(plain.width).toBeLessThanOrEqual(roomW + 1);
   expect(plain.height).toBeLessThanOrEqual(roomH + 1);
   await page.waitForTimeout(400);
-  await shot(page, 'nordlys_v4_mobile_noframe.png');
+  await shot(page, 'cineplate_v4_mobile_noframe.png');
 
   // The 1:1 still is the picture itself, at the file's own size.
   await page.locator('[data-testid="dock-export"]').click();
@@ -244,7 +244,7 @@ test('video: the playback toggle opens the sheet beside itself, never under it',
   await expect(page.locator('[data-testid="playback-overlay"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="play-button"]')).toHaveCount(0);
   await page.waitForTimeout(400);
-  await shot(page, 'nordlys_v4_mobile_video_bar.png');
+  await shot(page, 'cineplate_v4_mobile_video_bar.png');
 
   const closedBox = (await bar.boundingBox())!;
 
@@ -271,7 +271,7 @@ test('video: the playback toggle opens the sheet beside itself, never under it',
   const openBox = (await bar.boundingBox())!;
   expect(Math.abs(openBox.height - closedBox.height)).toBeLessThanOrEqual(2);
   await page.waitForTimeout(400);
-  await shot(page, 'nordlys_v4_mobile_video_overlay.png');
+  await shot(page, 'cineplate_v4_mobile_video_overlay.png');
 
   // The sheet is the transport: play/pause works from it.
   const play = page.locator('[data-testid="play-button"]');
@@ -313,7 +313,7 @@ test('4-cut slots live in the window only, and survive the trip to a single fram
   await expect(page.locator('.slot-strip')).toHaveCount(0);
   expect(await page.locator('.slot').count()).toBe(0);
   await page.waitForTimeout(400);
-  await shot(page, 'nordlys_v2_fourcut_editor.png');
+  await shot(page, 'cineplate_v2_fourcut_editor.png');
 
   // Switch to a single-cut frame: the bar must not appear then either.
   await page.locator('[data-testid="dock-frame"]').click();
@@ -355,7 +355,7 @@ test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ 
   await expect(page.locator('.topbar .chip').first()).toContainText('RETRO 90');
   await page.evaluate(() => { document.querySelector('.filter-strip')?.scrollTo({ left: 99999 }); });
   await page.waitForTimeout(400);
-  await shot(page, 'nordlys_v2_filter_strip_retro.png');
+  await shot(page, 'cineplate_v2_filter_strip_retro.png');
 
   // The window: HD2Lab Film (Neutral + nine stocks) → Margarine groups → Filter Set.
   await page.locator('[data-testid="dock-filter"]').click();
@@ -380,7 +380,7 @@ test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ 
   expect(modalOrder.slice(0, 10)).toEqual(['neutral', 'FS-001', 'FS-002', 'FS-003', 'FS-004', 'FS-005', 'FS-006', 'FS-007', 'FS-008', 'FS-009']);
   expect(modalOrder[modalOrder.length - 1]).toBe('FS-010');
   await page.waitForTimeout(500);
-  await shot(page, 'nordlys_v2_filter_modal_retro.png');
+  await shot(page, 'cineplate_v2_filter_modal_retro.png');
   await page.keyboard.press('Escape');
 });
 
@@ -455,7 +455,7 @@ test('mobile 390×844: the print centres in the stage and only the copy is boost
   expect(facts.canvas.width).toBeLessThanOrEqual(roomW + 1);
   expect(facts.canvas.height).toBeLessThanOrEqual(roomH + 1);
 
-  await shot(page, 'nordlys_v3_mobile_centred.png');
+  await shot(page, 'cineplate_v3_mobile_centred.png');
 
   // The same plate on a desktop: no boost, the frame's own band ratio, centred.
   await page.setViewportSize({ width: 1000, height: 800 });
@@ -475,5 +475,5 @@ test('mobile 390×844: the print centres in the stage and only the copy is boost
 
   await page.evaluate(() => { document.querySelector('.filter-strip')?.scrollTo({ left: 0 }); });
   await page.waitForTimeout(500);
-  await shot(page, 'nordlys_v3_desktop.png');
+  await shot(page, 'cineplate_v3_desktop.png');
 });
