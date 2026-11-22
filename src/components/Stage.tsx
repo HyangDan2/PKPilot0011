@@ -141,6 +141,10 @@ export function Stage(props: StageProps) {
       canvasKey.current = key;
     }
     canvas.dataset.frameEnabled = String(framed);
+    // Which mark the plate actually prints, so a test can read the same answer
+    // the ink does: an engine emblem id, or 'none'.
+    canvas.dataset.emblem = framed ? (layout?.emblem ?? 'none') : 'none';
+    canvas.dataset.emblemMono = String(state.frame.emblemMono === true);
 
     const source = state.activeMedia
       ? state.activeMedia.kind === 'photo'

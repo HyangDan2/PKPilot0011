@@ -1,5 +1,4 @@
-import type { FrameId } from '../types/studio';
-import { isMultiFrame } from '../types/studio';
+import { EMBLEM_IDS, isMultiFrame, type EmblemId, type FrameId } from '../types/studio';
 
 export interface FrameDef {
   id: FrameId;
@@ -44,6 +43,35 @@ export const SINGLE_FRAME_DEFS: FrameDef[] = FRAMES.filter((frame) => frameSuppo
 
 /** The two four-cut plates, for the 4-cut window. */
 export const MULTI_FRAME_DEFS: FrameDef[] = FRAMES.filter((frame) => !frameSupportsVideo(frame.id));
+
+/**
+ * The eleven marks the plate can print, in the studio's own order. Labels are
+ * the makers' own names — what the card under each logo says and what the
+ * emblem button reports as the current choice.
+ */
+export const EMBLEM_LABELS: Record<EmblemId, string> = {
+  hd2lab: 'HD2Lab',
+  sony: 'Sony',
+  canon: 'Canon',
+  nikon: 'Nikon',
+  fujifilm: 'Fujifilm',
+  samsung: 'Samsung',
+  leica: 'Leica',
+  hasselblad: 'Hasselblad',
+  apple: 'Apple',
+  lumix: 'Lumix',
+  omsystem: 'OM System',
+};
+
+export const EMBLEM_CHOICES: { id: EmblemId; label: string }[] = EMBLEM_IDS.map((id) => ({
+  id,
+  label: EMBLEM_LABELS[id],
+}));
+
+/** The maker's name for one of the engine's emblem ids. */
+export function emblemLabel(id: string): string {
+  return EMBLEM_LABELS[id as EmblemId] ?? 'HD2Lab';
+}
 
 export const FYRA_THEME_LABELS: { id: string; label: string }[] = [
   { id: 'midnight', label: 'Midnight' },

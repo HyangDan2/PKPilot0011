@@ -83,10 +83,14 @@ export function stageTypeBoost(input: {
 
 /**
  * Resolves the frame's emblem: the visitor's choice, or the maker's own mark.
+ * `auto` reads the make and the model together — a file that kept only
+ * `ILCE-7M4` still prints a Sony mark — and a chosen mark prints even when the
+ * EXIF says something else entirely.
  */
 export function resolveEmblem(frame: FrameSettings, meta: PlateMeta, emblems?: SPEmblemsApi | null): string {
   if (frame.emblem === 'none') return 'none';
-  if (frame.emblem === 'auto') return emblemForMake(meta.make, emblems);
+  if (frame.emblem === 'auto') return emblemForMake(meta.make, emblems, meta.model);
+  if (emblems && !emblems.has(frame.emblem)) return 'hd2lab';
   return frame.emblem;
 }
 

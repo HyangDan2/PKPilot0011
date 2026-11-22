@@ -332,14 +332,15 @@ test('4-cut slots live in the window only, and survive the trip to a single fram
   await page.keyboard.press('Escape');
 });
 
-/* ── 5. RETRO 90 after Margarine ──────────────────────────────────────────── */
+/* ── 5. RETRO 90 after the Margarine door ─────────────────────────────────── */
 
-test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ page }) => {
+test('RETRO 90 closes the film strip, and the 58 Margarine looks have their own window', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
   await openSamplePhoto(page);
 
+  // Ten stocks, the Margarine door, RETRO 90 — the strip carries no 58 cards.
   const stripOrder = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="filter-strip"] > *'))
     .map((element) => element.getAttribute('data-filter-key')
       ?? (element.classList.contains('margarine') ? 'margarine' : '?')));
@@ -357,20 +358,16 @@ test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ 
   await page.waitForTimeout(400);
   await shot(page, 'cineplate_v2_filter_strip_retro.png');
 
-  // The window: HD2Lab Film (Neutral + nine stocks) → Margarine groups → Filter Set.
+  // The film window: HD2Lab Film (Neutral + nine stocks), then RETRO 90 only.
   await page.locator('[data-testid="dock-filter"]').click();
   await expect(page.locator('[data-testid="filter-modal"]')).toBeVisible();
   const sections = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="filter-modal"] .section-title'))
     .map((title) => (title.childNodes[0]?.textContent ?? '').trim()));
-  expect(sections[0]).toBe('HD2Lab Film');
-  // six Margarine groups, in the catalogue's own order, right after the film shelf
-  expect(sections.slice(1, 7)).toHaveLength(6);
-  for (const title of sections.slice(1, 7)) expect(title.startsWith('Margarine · ')).toBe(true);
-  expect(sections[sections.length - 1]).toBe('Filter Set · RETRO 90');
+  expect(sections).toEqual(['HD2Lab Film', 'Filter Set · RETRO 90']);
 
   const chips = await page.locator('[data-testid="filter-modal"] .chip-row .chip').allTextContents();
   expect(chips[0]).toContain('전체');
-  expect(chips[0]).toContain('69');
+  expect(chips[0]).toContain('11');
   expect(chips[1]).toContain('HD2Lab Film');
   expect(chips[chips.length - 1]).toContain('Filter Set · RETRO 90');
 
@@ -379,8 +376,16 @@ test('RETRO 90 closes the filter shelf, after the 58 Margarine looks', async ({ 
     .map((card) => card.getAttribute('data-filter-key')));
   expect(modalOrder.slice(0, 10)).toEqual(['neutral', 'FS-001', 'FS-002', 'FS-003', 'FS-004', 'FS-005', 'FS-006', 'FS-007', 'FS-008', 'FS-009']);
   expect(modalOrder[modalOrder.length - 1]).toBe('FS-010');
+  expect(modalOrder).toHaveLength(11);
   await page.waitForTimeout(500);
   await shot(page, 'cineplate_v2_filter_modal_retro.png');
+  await page.keyboard.press('Escape');
+
+  // The Margarine door opens the 58 looks in their own window.
+  await page.locator('[data-testid="margarine-door"]').click();
+  await expect(page.locator('[data-testid="margarine-modal"]')).toBeVisible();
+  await expect(page.locator('[data-testid="margarine-modal"] [data-filter-key]')).toHaveCount(58);
+  await expect(page.locator('[data-testid="filter-modal"]')).toHaveCount(0);
   await page.keyboard.press('Escape');
 });
 

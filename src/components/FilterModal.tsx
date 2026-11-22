@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { Slider } from './controls';
-import { ALL_FILTERS, FILM_FILTERS, MARGARINE_GROUPS, MARGARINE_FILTERS, NEUTRAL_FILTER, RETRO90_FILTER, type FilterOption } from '../filters/catalog';
+import { FILM_FILTERS, NEUTRAL_FILTER, RETRO90_FILTER, type FilterOption } from '../filters/catalog';
 import type { FilterSelection } from '../types/studio';
 import { IconCheck } from './Icons';
 
@@ -14,20 +14,22 @@ interface FilterModalProps {
   onClose: () => void;
 }
 
-/** HD2Lab Film (Neutral + nine stocks), then the Margarine groups, then RETRO 90. */
+/**
+ * HD2Lab Film (Neutral + nine stocks) and RETRO 90 — the film shelf. The 58
+ * Margarine looks have their own window (`MargarineModal`), so this one never
+ * repeats them.
+ */
 const SECTIONS: { id: string; label: string; filters: FilterOption[] }[] = [
   { id: 'hd2lab', label: 'HD2Lab Film', filters: [NEUTRAL_FILTER, ...FILM_FILTERS] },
-  ...MARGARINE_GROUPS.map((group) => ({
-    id: group,
-    label: `Margarine · ${group}`,
-    filters: MARGARINE_FILTERS.filter((filter) => filter.group === group),
-  })),
   { id: 'filterset', label: 'Filter Set · RETRO 90', filters: [RETRO90_FILTER] },
 ];
 
+/** The ten stocks and RETRO 90: what this window lists, and what its chip counts. */
+const FILM_TOTAL = SECTIONS.reduce((total, section) => total + section.filters.length, 0);
+
 export function FilterModal({ selection, strength, thumbs, onSelect, onStrength, onClose }: FilterModalProps) {
   const [tab, setTab] = useState('all');
-  const activeKey = selection.kind === 'margarine' ? `mg-${selection.presetId}` : selection.filmId;
+  const activeKey = selection.kind === 'margarine' ? null : selection.filmId;
   const visible = useMemo(
     () => (tab === 'all' ? SECTIONS : SECTIONS.filter((section) => section.id === tab)),
     [tab],
@@ -36,8 +38,8 @@ export function FilterModal({ selection, strength, thumbs, onSelect, onStrength,
   return (
     <Modal
       kicker="FILTER MODAL"
-      title="필터 선택"
-      description="지금 화면의 프레임에 각 필터를 입힌 라이브 썸네일입니다. 누르면 바로 적용됩니다."
+      title="필름 선택"
+      description="HD2Lab 필름 10종과 RETRO 90입니다. 지금 화면의 프레임에 각 필터를 입힌 라이브 썸네일이고, 누르면 바로 적용됩니다. 마가린 58종은 필름 목록의 마가린 카드에서 엽니다."
       onClose={onClose}
       size="wide"
       testId="filter-modal"
@@ -60,7 +62,7 @@ export function FilterModal({ selection, strength, thumbs, onSelect, onStrength,
     >
       <div className="chip-row sticky">
         <button type="button" className={`chip${tab === 'all' ? ' on' : ''}`} onClick={() => setTab('all')}>
-          전체 <span>{ALL_FILTERS.length}</span>
+          전체 <span>{FILM_TOTAL}</span>
         </button>
         {SECTIONS.map((section) => (
           <button
@@ -69,7 +71,7 @@ export function FilterModal({ selection, strength, thumbs, onSelect, onStrength,
             className={`chip${tab === section.id ? ' on' : ''}`}
             onClick={() => setTab(section.id)}
           >
-            {section.label.replace('Margarine · ', '')} <span>{section.filters.length}</span>
+            {section.label} <span>{section.filters.length}</span>
           </button>
         ))}
       </div>
