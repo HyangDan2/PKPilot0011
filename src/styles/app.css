@@ -381,12 +381,25 @@ button.portal-item:disabled:hover { background: transparent; }
 /* the viewport stays neutral: the plate's own stock must read true */
 .stage.backdrop-dark { background: radial-gradient(900px 480px at 50% 40%, #141614, #0a0b0a 72%); }
 .stage.backdrop-light { background: radial-gradient(900px 480px at 50% 40%, #e9ece6, #d8ded6 78%); }
-.stage-inner { position: relative; display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 100%; }
-.plate-canvas { display: block; max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42); transition: opacity 0.25s ease; }
+/* The plate's box is the stage itself — never a size derived from the print.
+   A box that takes its width from its own height (an aspect-ratio transfer is
+   the classic way) can come back wider than the stage on WebKit, and then the
+   print centres inside that wider box: pushed right, cut off on the right edge,
+   with a dead gutter on the left. Pinning the box to the stage and centring the
+   print with its own auto margins leaves no sizing rule — badge, hint, ratio —
+   with a say in where the print sits. */
+.stage-inner { position: absolute; inset: 0; }
+.plate-canvas {
+  position: absolute; inset: 0; margin: auto;
+  display: block; max-width: 100%; max-height: 100%; border-radius: 2px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42); transition: opacity 0.25s ease;
+}
 .plate-canvas.is-loading { opacity: 0; }
 .stage-skeleton { position: absolute; inset: 12% 18%; border-radius: 6px; background: linear-gradient(100deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 220% 100%; animation: shimmer 1.3s linear infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }
-.stage-error { position: absolute; color: var(--error); font-size: 13px; }
+.stage-error {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  max-width: 82%; text-align: center; color: var(--error); font-size: 13px;
+}
 .stage-notice {
   position: absolute; inset: auto 12px 12px 12px; display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; border-radius: 12px; background: rgba(10, 12, 20, 0.82);

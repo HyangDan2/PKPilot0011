@@ -72,7 +72,6 @@ export function Stage(props: StageProps) {
   const [contextLost, setContextLost] = useState(false);
   const [glUnavailable, setGlUnavailable] = useState(false);
   const [contextEpoch, setContextEpoch] = useState(0);
-  const [ratio, setRatio] = useState(1.5);
   const cssScale = useRef(1);
   /** The room the plate was fitted into, and the viewport margin around it. */
   const roomRef = useRef({ width: 0, height: 0 });
@@ -255,7 +254,6 @@ export function Stage(props: StageProps) {
         cssScale.current = 1;
         canvasKey.current = '';
         setGlUnavailable(!(painter?.available ?? false));
-        setRatio(W / H);
         draw();
         setReady(true);
         return;
@@ -300,7 +298,6 @@ export function Stage(props: StageProps) {
         // letting the canvas hang off the edge.
         cssScale.current = Math.min(1, room.width / layout.W, room.height / layout.H);
         canvasKey.current = '';
-        setRatio(layout.W / layout.H);
         draw();
         setReady(true);
         return;
@@ -325,7 +322,6 @@ export function Stage(props: StageProps) {
       layoutRef.current = layout;
       cssScale.current = scale;
       setGlUnavailable(!(painter?.available ?? false));
-      setRatio(layout.W / layout.H);
       draw();
       setReady(true);
     };
@@ -527,7 +523,9 @@ export function Stage(props: StageProps) {
 
   return (
     <div className={`stage backdrop-${frame.backdrop}`} ref={hostRef}>
-      <div className="stage-inner" style={{ aspectRatio: ratio > 0 ? `${ratio}` : undefined }}>
+      {/* The box is the stage; the print centres itself inside it with its own
+          auto margins, so nothing that sizes this box can shift the plate. */}
+      <div className="stage-inner">
         <canvas
           ref={canvasRef}
           className={`plate-canvas${!ready ? ' is-loading' : ''}`}
