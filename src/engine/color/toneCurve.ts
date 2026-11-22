@@ -47,6 +47,9 @@ export function createMonotoneSpline(points: [number, number][]): (x: number) =>
   }
 
   return (x: number): number => {
+    // Outside the end points' inputs the tone is held at the end point's own
+    // value, so pulling the black or white point inward really does lift or
+    // crush the tones beyond it.
     if (x <= xs[0]) return ys[0];
     if (x >= xs[n - 1]) return ys[n - 1];
 
@@ -70,4 +73,24 @@ export function createMonotoneSpline(points: [number, number][]): (x: number) =>
 
     return Math.min(1.0, Math.max(0.0, val));
   };
+}
+
+/**
+ * True when the curve leaves the picture untouched — the reading the "curve is
+ * in use" badge takes.
+ *
+ * It samples the interpolation itself instead of comparing control points:
+ * a reset that lands on the identity line then always reads as identity, no
+ * matter how the floats rounded on the way, and a straight line built from
+ * extra points counts for what it is. An end point pulled inward changes the
+ * sample (the tones past it are held at its value), so it reads as a grade.
+ */
+export function curveIsIdentity(points: [number, number][], tolerance = 1e-6): boolean {
+  if (points.length < 2) return false;
+  const sample = createMonotoneSpline(points);
+  for (let i = 0; i <= 128; i += 1) {
+    const x = i / 128;
+    if (Math.abs(sample(x) - x) > tolerance) return false;
+  }
+  return true;
 }

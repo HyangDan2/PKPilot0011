@@ -469,6 +469,19 @@ button.portal-item:disabled:hover { background: transparent; }
 .tonecurve-chip.accent { color: #ffcf9e; }
 .tonecurve-chip:disabled { opacity: 0.36; }
 .tonecurve-chip.icon { padding: 3px 5px; }
+/* The close is the one target a thumb must find on the first try, so it gets a
+   full 32px square (36 on a touch screen) instead of the chip's text padding. */
+.tonecurve-close {
+  flex: 0 0 auto; width: 32px; height: 32px; min-width: 32px; min-height: 32px;
+  padding: 0; border-radius: 8px; display: grid; place-items: center;
+  border-color: rgba(226, 232, 240, 0.55); background: rgba(10, 12, 20, 0.85);
+  color: #f8fafc;
+}
+.tonecurve-close:hover { border-color: #fff; color: #fff; }
+.tonecurve-close svg { pointer-events: none; }
+@media (pointer: coarse) {
+  .tonecurve-close { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+}
 .tonecurve-graph {
   display: block; width: 100%; height: auto; background: transparent;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));

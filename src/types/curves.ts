@@ -17,7 +17,9 @@ export function normalizeCurves(value?: Partial<ToneCurves>): ToneCurves {
   }
   return result;
 }
-export const isIdentityCurve = (points: CurvePoint[]) => points.length >= 2 && points[0][0] === 0 && points.at(-1)![0] === 1 && points.every(([x,y]) => Math.abs(x-y)<1e-7);
+// Kept out of here on purpose: whether a curve still changes the picture is a
+// question about its interpolation, so `curveIsIdentity` lives next to the
+// spline in engine/color/toneCurve.ts and the badge and the shader share it.
 
 // Keep point order while allowing both endpoints to move across the input range.
 export function moveCurvePoint(points: CurvePoint[], index: number, x: number, y: number): CurvePoint[] {
