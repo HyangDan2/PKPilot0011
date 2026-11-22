@@ -3,6 +3,8 @@ import { Landing, SAMPLES, type SampleItem } from './components/Landing';
 import { Stage, useLongPress, type MediaBank } from './components/Stage';
 import { Timeline } from './components/Timeline';
 import { FilterModal } from './components/FilterModal';
+import { MargarineModal } from './components/MargarineModal';
+import { EmblemModal } from './components/EmblemModal';
 import { FrameModal } from './components/FrameModal';
 import { FourCutModal } from './components/FourCutModal';
 import { AdjustModal } from './components/AdjustModal';
@@ -52,14 +54,15 @@ import {
 import { clearWorkspaceThumbs } from './media/workspaceThumbs';
 import { clearFilmThumbs, type FilmThumbSource } from './studio/filmThumbs';
 import { buildFrameThumbs, buildFilterThumbs, type Cancellation } from './studio/thumbnails';
-import { styleLabel } from './studio/render';
+import { styleLabel, resolveEmblem } from './studio/render';
 import { PhotoGrader, thumbnailSource } from './studio/grading';
 import { exportMovie, exportStill } from './studio/exporters';
-import { ALL_FILTERS, margarinePreset } from './filters/catalog';
+import { ALL_FILTERS, MARGARINE_FILTERS, margarinePreset } from './filters/catalog';
 import { FRAME_MAP, FRAMES, SINGLE_FRAME_DEFS } from './plate/frames';
 import { assetUrl } from './utils/assets';
 import type { FilterOption } from './filters/catalog';
 import type { FrameId, MediaInfo, PlateMeta, VideoExportOptions } from './types/studio';
+import type { ModalKind } from './state/studio';
 import type { ExportProgress } from './export/videoExporter';
 import type { StillResult } from './studio/exporters';
 
@@ -115,6 +118,8 @@ export default function App() {
   const [scanning, setScanning] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState(false);
   const [openBusy, setOpenBusy] = useState<string | false>(false);
+  /** Where the emblem window goes back to: the frame window, the 4-cut window, or nothing. */
+  const [emblemReturn, setEmblemReturn] = useState<ModalKind>(null);
 
   const bank = useRef<MediaBank>({ photos: new Map(), video: null });
   const fileRef = useRef<File | null>(null);
@@ -163,6 +168,14 @@ export default function App() {
     [state.filter],
   );
 
+  /** The Margarine look in use, if any: the strip leads with its own card. */
+  const activeMargarine = useMemo(
+    () => (state.filter.kind === 'margarine'
+      ? MARGARINE_FILTERS.find((filter) => filter.key === `mg-${state.filter.presetId}`) ?? null
+      : null),
+    [state.filter],
+  );
+
   const composedMeta = useMemo<PlateMeta>(() => {
     const base = { ...withSpecFallback(activeMedia), ...metaOverride };
     return {
@@ -177,6 +190,15 @@ export default function App() {
       caption: state.frame.showCaption ? base.caption : '',
     };
   }, [activeMedia, metaOverride, state.frame.showSpec, state.frame.showCaption]);
+
+  /**
+   * What `auto` prints for this file, whatever is chosen now: the emblem row
+   * and the Auto card both say what the camera's own data would give.
+   */
+  const resolvedEmblem = useMemo(
+    () => resolveEmblem({ ...state.frame, emblem: 'auto' }, composedMeta, engine?.emblems ?? null),
+    [state.frame, composedMeta, engine],
+  );
 
   /* ── engine boot ────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -598,6 +620,35 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, activeMedia?.url, engine !== null]);
 
+  /**
+   * The strip's build covers the ten stocks and RETRO 90; a Margarine look in
+   * use gets its own still here, so its card shows the look and not its key.
+   */
+  useEffect(() => {
+    if (view !== 'editor' || !activeMedia || !activeMargarine) return;
+    if (stripThumbs[activeMargarine.key]) return;
+    const source = thumbnailSource({
+      kind: activeMedia.kind,
+      drawable: bank.current.photos.get(activeMedia.url) ?? null,
+      video: bank.current.video,
+    });
+    if (!source) return;
+    const token: Cancellation = { cancelled: false };
+    const grader = new PhotoGrader();
+    void buildFilterThumbs({
+      grader,
+      source,
+      sourceWidth: activeMedia.width,
+      sourceHeight: activeMedia.height,
+      filters: [activeMargarine],
+      width: 104,
+      onEach: (key, url) => setStripThumbs((previous) => ({ ...previous, [key]: url })),
+      token,
+    }).finally(() => grader.destroy());
+    return () => { token.cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, activeMedia?.url, activeMargarine?.key]);
+
   /** Every filter's own still, for the film shelf and the filter window. */
   const buildAllFilterThumbs = useCallback((options: { token?: Cancellation; silent?: boolean } = {}) => {
     if (!activeMedia) return;
@@ -628,6 +679,18 @@ export default function App() {
     dispatch({ type: 'open-modal', modal: 'filter' });
     buildAllFilterThumbs();
   }, [buildAllFilterThumbs]);
+
+  /** The 58 Margarine looks, in their own window: its live stills come from the same build. */
+  const openMargarineModal = useCallback(() => {
+    dispatch({ type: 'open-modal', modal: 'margarine' });
+    buildAllFilterThumbs();
+  }, [buildAllFilterThumbs]);
+
+  /** The eleven maker marks. Opened from a sheet, closing it hands that sheet back. */
+  const openEmblemModal = useCallback((from: ModalKind = null) => {
+    setEmblemReturn(from);
+    dispatch({ type: 'open-modal', modal: 'emblem' });
+  }, []);
 
   const buildThumbs = useCallback((
     ids: FrameId[],
@@ -735,8 +798,12 @@ export default function App() {
 
   const closeModal = useCallback(() => {
     if (cancelRef.current) cancelRef.current.cancelled = true;
-    dispatch({ type: 'open-modal', modal: null });
-  }, []);
+    // The emblem window sits on top of a frame or 4-cut window: closing it
+    // returns there rather than dropping the visitor back into the studio.
+    const back = emblemReturn;
+    setEmblemReturn(null);
+    dispatch({ type: 'open-modal', modal: back ?? null });
+  }, [emblemReturn]);
 
   /* ── the wide studio's shelves: previews are built once per open file ───── */
   /** The frame the shelf's stills are graded from, one per open file. */
@@ -1058,6 +1125,9 @@ export default function App() {
       onPasteCustom={(text) => void importCustomText(text)}
       onDeleteCustom={(id) => void removeCustomFrame(id)}
       busy={busy}
+      emblems={engine?.emblems ?? null}
+      resolvedEmblem={resolvedEmblem}
+      onOpenEmblem={() => openEmblemModal('fourcut')}
       onPatch={(patch) => dispatch({ type: 'set-frame', patch })}
       onMeta={editMeta}
       onAddFiles={(files) => void addFourCutFiles(files)}
@@ -1283,6 +1353,10 @@ export default function App() {
             onOpenFourCut={openFourCutModal}
             customFrames={customFrames}
             customThumbs={customThumbs}
+            onOpenMargarine={openMargarineModal}
+            emblems={engine.emblems}
+            resolvedEmblem={resolvedEmblem}
+            onOpenEmblem={() => openEmblemModal(null)}
           />
 
           <div className="pc-center">
@@ -1477,11 +1551,11 @@ export default function App() {
             thumbs={stripThumbs}
             margarineName={margarineName}
             onSelect={selectFilter}
-            onOpenAll={openFilterModal}
+            onOpenMargarine={openMargarineModal}
           />
 
           <nav className="dock" aria-label="스튜디오 도구">
-            <button type="button" className="dock-btn primary" onClick={openFilterModal} data-testid="dock-filter">
+            <button type="button" className="dock-btn primary" onClick={() => (state.filter.kind === 'margarine' ? openMargarineModal() : openFilterModal())} data-testid="dock-filter">
               <IconFilm size={21} />
               <span>필터 선택</span>
               <small>{filterLabel}</small>
@@ -1515,6 +1589,27 @@ export default function App() {
           onClose={closeModal}
         />
       )}
+      {state.modal === 'margarine' && (
+        <MargarineModal
+          selection={state.filter}
+          strength={state.grade.adjustments.filmStrength}
+          thumbs={filterThumbs}
+          onSelect={selectFilter}
+          onStrength={(value) => dispatch({ type: 'patch-adjustments', patch: { filmStrength: value } })}
+          onClose={closeModal}
+        />
+      )}
+      {state.modal === 'emblem' && (
+        <EmblemModal
+          value={state.frame.emblem}
+          resolved={resolvedEmblem}
+          mono={state.frame.emblemMono}
+          backdrop={state.frame.backdrop}
+          emblems={engine?.emblems ?? null}
+          onPatch={(patch) => dispatch({ type: 'set-frame', patch })}
+          onClose={closeModal}
+        />
+      )}
       {state.modal === 'frame' && (
         <FrameModal
           frame={state.frame}
@@ -1525,6 +1620,9 @@ export default function App() {
           onMeta={editMeta}
           onPatch={(patch) => dispatch({ type: 'set-frame', patch })}
           onClose={closeModal}
+          emblems={engine.emblems}
+          resolvedEmblem={resolvedEmblem}
+          onOpenEmblem={() => openEmblemModal('frame')}
         />
       )}
       {fourCutWindow}

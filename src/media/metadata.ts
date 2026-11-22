@@ -70,15 +70,51 @@ export function metaFromExif(exif: ExifLike | null | undefined): PlateMeta {
   };
 }
 
-export async function readPhotoMeta(file: Blob): Promise<PlateMeta> {
+/** The tags the plate prints, in the names exifr reports them under. */
+const EXIF_TAGS = [
+  'Make', 'Model', 'LensModel', 'Lens', 'FocalLength', 'FocalLengthIn35mmFormat',
+  'FNumber', 'ExposureTime', 'ISO', 'ISOSpeedRatings',
+  'DateTimeOriginal', 'CreateDate', 'ModifyDate',
+];
+
+/**
+ * Reads a file's EXIF through exifr, which is loaded on demand so the studio's
+ * first paint does not carry the parser.
+ *
+ * Two passes on purpose: a JPEG or HEIC answers the first (`pick` keeps the
+ * read small), but an export that keeps its camera tags in XMP, or whose EXIF
+ * block exifr cannot settle in one go, still has a make and a model to find.
+ * Only the maker tags decide whether the second pass is worth a file read —
+ * everything else the plate prints is already in hand.
+ */
+async function readExif(file: Blob): Promise<ExifLike | null> {
+  let parse: ((input: Blob, options?: Record<string, unknown>) => Promise<unknown>) | null = null;
   try {
-    const { parse } = await import('exifr');
-    const exif = (await parse(file, {
-      pick: ['Make', 'Model', 'LensModel', 'Lens', 'FocalLength', 'FocalLengthIn35mmFormat', 'FNumber', 'ExposureTime', 'ISO', 'ISOSpeedRatings', 'DateTimeOriginal', 'CreateDate', 'ModifyDate'],
-      reviveValues: false,
-    })) as ExifLike | null;
-    return metaFromExif(exif);
+    const module = await import('exifr');
+    parse = (module.parse ?? (module as unknown as { default?: { parse?: typeof parse } }).default?.parse) ?? null;
   } catch {
-    return metaFromExif(null);
+    return null;
   }
+  if (!parse) return null;
+
+  let picked: ExifLike | null = null;
+  try {
+    picked = (await parse(file, { pick: EXIF_TAGS, reviveValues: false })) as ExifLike | null;
+  } catch {
+    picked = null;
+  }
+  const named = (value: ExifLike | null) => !!(value?.Make?.trim?.() || value?.Model?.trim?.());
+  if (named(picked)) return picked;
+
+  try {
+    const wide = (await parse(file, { reviveValues: false, tiff: true, xmp: true, silentErrors: true })) as ExifLike | null;
+    if (named(wide)) return wide;
+    return picked ?? wide ?? null;
+  } catch {
+    return picked ?? null;
+  }
+}
+
+export async function readPhotoMeta(file: Blob): Promise<PlateMeta> {
+  return metaFromExif(await readExif(file));
 }

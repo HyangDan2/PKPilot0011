@@ -53,17 +53,25 @@
 - **4컷 2종** — Contact Sheet, FYRA 04. **사진 전용**이며, 우측 하단의 **4컷 버튼**이 여는
   전용 창에서 2종 선택 · SLOT 1~4 관리(한 번에 추가/개별 교체/삭제) · 프레임 옵션을 한 번에 처리합니다.
   FYRA 04 테마는 **Midnight · Snow · Forest · Sand** 를 포함한 10종.
-- 여백·배경(Dark/Light)·엠블럼(Auto/HD2Lab/없음)·엠블럼 잉크(Original/All Black)·
+- 여백·배경(Dark/Light)·**엠블럼**(전용 창에서 `EXIF 자동` · `없음` · 메이커 11종)·엠블럼 잉크(Original/All Black)·
   촬영 정보/캡션 토글, 그리고 카메라·렌즈·노출·촬영일·캡션 직접 편집.
 
 ### 화면 구성과 창
 
 - **하단 필름 스트립** — Neutral + FS-001~FS-009 + RETRO 90 카드를 좌우로 넘기며 **한 번에 적용**,
-  끝에는 Margarine 58종 바로가기. 썸네일은 지금 화면으로 그린 라이브 프리뷰입니다.
+  끝에는 Margarine 58종 전용 모달 바로가기. 마가린 룩을 쓰는 중에는 그 룩이 스트립 맨 앞에
+  **선택된 카드**로 서고, 바로가기 카드가 `적용 중 · 룩 이름`을 답니다. 썸네일은 지금 화면으로 그린 라이브 프리뷰입니다.
 - **타이틀 옆 슬라이드** — 플레이트 뒤 **뷰포트 배경**(`frame.backdrop` Dark/Light)만 바꾸고,
   **우측 하단 플로팅 토글** — 앱 전체 테마(`data-theme`)를 바꿉니다. 둘은 서로 독립입니다.
-- **필터 모달** — 지금 화면의 프레임에 69종 필터를 각각 입힌 **라이브 썸네일 그리드**,
-  카테고리 칩(HD2Lab / Margarine 여섯 갈래), 필터 강도 슬라이더, 누르면 즉시 적용.
+- **필름 모달** — HD2Lab 필름 10종 + RETRO 90을 각각 입힌 **라이브 썸네일 그리드**,
+  필터 강도 슬라이더, 누르면 즉시 적용. 58종 마가린 룩은 이 창에 섞지 않습니다.
+- **마가린 모달** — Margarine 58종 전용 창. 그룹 칩(`전체 58 · Light · Cafe · Color · Vintage · Portrait · Nature`),
+  룩 이름·설명 검색, 라이브 썸네일 그리드, 하단 강도 슬라이더. 진입은 PC 좌측 필름 패널의
+  `Margarine 58종` 버튼과 모바일 스트립의 마가린 카드입니다.
+- **엠블럼 모달** — 판면에 인화되는 메이커 마크 11종(HD2Lab · Sony · Canon · Nikon · Fujifilm · Samsung ·
+  Leica · Hasselblad · Apple · Lumix · OM System)을 정식 로고 카드로 보여 줍니다. 상단 `EXIF 자동` /
+  `없음` 과 `Original(브랜드 컬러)` / `All Black(단색)` 전환, 카드를 누르면 EXIF와 무관하게 그 로고로 인화.
+  `EXIF 자동`은 파일의 **Make와 Model을 함께** 읽어 고릅니다(예: `ILCE-7M4`만 있어도 Sony).
 - **프레임 모달**(단일 11종) · **4컷 창** · **세부 보정**(빛 · 색 · 질감 · 영상) ·
   **Color Lab**(8대역 HSL · Color Focus · RGB Base) · **Tone Curve**(W/R/G/B 스플라인) ·
   **Camera Effects**(날짜 각인 · 광학 효과) — 뒤 세 도구 중 Color Lab·Camera Effects는 창으로,
@@ -165,6 +173,9 @@ tools/generate_brand_assets.py  아이콘 세트 · manifest · OG 카드 재생
 - `tests/filters.test.ts` — 9+1+58 카탈로그, 필터 선택 시 보정 초기화, RETRO 광학 효과
 - `tests/codecs.test.ts` — H.264→VP9→VP8 폴백, AAC 부재 시 무음, 짝수 해상도, 트림 프레임 그리드
 - `tests/media.test.ts` — 노출/초점/셔터 표기, EXIF → 메타, 파일 라우팅
+- `tests/emblem.test.ts` — 실제 `emblems.js`의 11종 목록·벡터 미리보기, Make+Model 판별(모델만 있는 파일 포함), `auto`/지정/`none` 해석
+- `tests/exif.test.ts` — 바이트로 직접 만든 **EXIF 포함 JPEG과 HEIC**를 `readPhotoMeta`로 읽어 메이커·노출값을 확인(HEIC는 `meta`/`iinf`/`iloc` 박스까지 실제 구조)
+- `tests/modals.test.ts` — 마가린 창(58장·6그룹·강도 슬라이더)과 엠블럼 창(자동/없음·11종·잉크 전환)의 구성
 - `tests/studio.test.ts` — 리듀서(트림·프레임 강등·필터 리셋·날짜), 스테이지 피팅
 - `tests/engine.test.ts` — 실제 `.cube` LUT 파싱·항등 보간, 톤커브 텍스처, 시간 시드 그레인·HDR 가드 셰이더 계약
 - `tests/upgrade.test.ts` — 실제 트랙 파라미터 오디오 프로브·Opus 폴백, 판면 클램프/짝수,
@@ -173,6 +184,8 @@ tools/generate_brand_assets.py  아이콘 세트 · manifest · OG 카드 재생
   11종 프레임 창 · 4컷 창 · Color Lab/Tone Curve/Camera Effects · 저장/공유 창을 확인하고
   **겹침·오버플로·콘솔 에러 0건**, 모바일 판면 글자 최소 크기, 그리고 **내보낸 영상에 들리는 소리**
   (AudioContext 디코드 피크 > 0.2)까지 검사합니다. 검증용 내보내기 파일은 `downloads/`에 저장됩니다.
+- `tests/e2e/margarine-emblem.spec.ts` — PC·모바일에서 마가린 창(그룹·검색·적용)과 엠블럼 창(11종·Original/All Black·
+  판면 `data-emblem` 반영), 그리고 EXIF를 넣은 JPEG을 올렸을 때 `auto`가 Apple/Fujifilm로 인화되는지 확인합니다.
 - `tests/e2e/video-fix.spec.ts` — 음소거 자동재생 클립이 [소리 켜기] 탭 한 번으로 실제 PCM을
   내보내는지(Web Audio `AnalyserNode` RMS > 0.01), 모바일에서 길게 눌러도 원본 비교 배지가
   뜨지 않는지, 톤 커브가 `.stage-wrap` 안에서 투명·중앙·스테이지 내부에 머무는지를 검증합니다.

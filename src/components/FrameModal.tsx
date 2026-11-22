@@ -2,7 +2,9 @@ import { Modal } from './Modal';
 import { Segmented, Slider, Toggle } from './controls';
 import { FRAME_MAP, FYRA_THEME_LABELS, SINGLE_FRAME_DEFS } from '../plate/frames';
 import { Field } from './controls';
+import { EmblemPicker } from './EmblemModal';
 import { IconCheck } from './Icons';
+import type { SPEmblemsApi } from '../plate/engine';
 import type { FrameId, FrameSettings, MediaKind, PlateMeta } from '../types/studio';
 
 interface FrameModalProps {
@@ -15,12 +17,16 @@ interface FrameModalProps {
   onClose: () => void;
   /** The frame's own default margin, so the "기본값" slider position is honest. */
   defaultPad: number;
+  /** The emblem window behind the emblem row. */
+  emblems: SPEmblemsApi | null;
+  resolvedEmblem: string;
+  onOpenEmblem: () => void;
 }
 
 /** The eleven single-cut signatures. The two 4-up plates live in their own window. */
 const SINGLE = SINGLE_FRAME_DEFS;
 
-export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, onClose, defaultPad }: FrameModalProps) {
+export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, onClose, defaultPad, emblems, resolvedEmblem, onOpenEmblem }: FrameModalProps) {
   const padValue = frame.padPct ?? defaultPad;
   return (
     <Modal
@@ -100,15 +106,15 @@ export function FrameModal({ frame, mediaKind, thumbs, onPatch, meta, onMeta, on
           onChange={(value) => onPatch({ padPct: value })}
           hint={`이 프레임의 기본 여백은 ${defaultPad.toFixed(1)}%입니다.`}
         />
-        <Segmented
-          label="엠블럼"
+        <EmblemPicker
           value={frame.emblem}
-          options={[
-            { value: 'auto', label: 'Auto · 메이커' },
-            { value: 'hd2lab', label: 'HD2Lab' },
-            { value: 'none', label: '없음' },
-          ]}
-          onChange={(value) => onPatch({ emblem: value })}
+          resolved={resolvedEmblem}
+          mono={frame.emblemMono}
+          backdrop={frame.backdrop}
+          emblems={emblems}
+          onOpen={onOpenEmblem}
+          label="엠블럼"
+          testId="frame-emblem-open"
         />
         <Segmented
           label="엠블럼 잉크"

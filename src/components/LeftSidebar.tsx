@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ALL_FILTERS, MARGARINE_GROUPS, type FilterOption } from '../filters/catalog';
+import { FILM_FILTERS, MARGARINE_FILTERS, NEUTRAL_FILTER, RETRO90_FILTER, type FilterOption } from '../filters/catalog';
 import { FRAME_MAP, FRAMES, FYRA_THEME_LABELS, MULTI_FRAME_DEFS, SINGLE_FRAME_DEFS } from '../plate/frames';
 import { Field, Segmented, Slider, Toggle } from './controls';
-import { IconCheck, IconFolder, IconSearch } from './Icons';
+import { EmblemPicker } from './EmblemModal';
+import { IconCheck, IconChevronRight, IconFilm, IconFolder, IconSearch } from './Icons';
+import type { SPEmblemsApi } from '../plate/engine';
 import { cachedFilmThumb, requestFilmThumb, type FilmThumbSource } from '../studio/filmThumbs';
 import { customStyleOf, type ShutterFrameSpec } from '../plate/custom';
 import type { FilterSelection, FrameId, FrameSettings, MediaInfo, MediaKind, PlateMeta } from '../types/studio';
@@ -144,15 +146,19 @@ interface LeftSidebarProps {
   onPatchFrame: (patch: Partial<FrameSettings>) => void;
   onMeta: (patch: Partial<PlateMeta>) => void;
   onOpenFourCut: () => void;
+
+  /** The Margarine door above the film list, and the emblem window it opens. */
+  onOpenMargarine: () => void;
+  emblems: SPEmblemsApi | null;
+  /** What the frame's `auto` emblem resolves to for the open file. */
+  resolvedEmblem: string;
+  onOpenEmblem: () => void;
 }
 
-/** Neutral · the nine stocks · Margarine's groups · RETRO 90, in shelf order. */
-function filterMatches(filter: FilterOption, search: string, group: string): boolean {
-  if (group !== 'all') {
-    if (group === 'hd2lab' && !(filter.kind === 'film' || filter.kind === 'neutral')) return false;
-    if (group === 'retro90' && filter.kind !== 'film') return false;
-    if (group !== 'hd2lab' && group !== 'retro90' && filter.group !== group) return false;
-  }
+/** Neutral · the nine stocks · RETRO 90 — the shelf; the 58 Margarine looks have their own window. */
+const FILM_SHELF: FilterOption[] = [NEUTRAL_FILTER, ...FILM_FILTERS, RETRO90_FILTER];
+
+function filterMatches(filter: FilterOption, search: string): boolean {
   const needle = search.trim().toLowerCase();
   if (!needle) return true;
   return `${filter.name} ${filter.detail} ${filter.key}`.toLowerCase().includes(needle);
@@ -165,15 +171,18 @@ function filterMatches(filter: FilterOption, search: string, group: string): boo
  */
 export function LeftSidebar(props: LeftSidebarProps) {
   const [search, setSearch] = useState('');
-  const [group, setGroup] = useState('all');
   const [frameMode, setFrameMode] = useState<'single' | 'multi'>(() => (props.frame.style === 'contact' || props.frame.style === 'fyra04' ? 'multi' : 'single'));
 
   const films = useMemo(
-    () => ALL_FILTERS.filter((filter) => filterMatches(filter, search, group)),
-    [search, group],
+    () => FILM_SHELF.filter((filter) => filterMatches(filter, search)),
+    [search],
   );
 
   const activeFilterKey = props.filter.kind === 'margarine' ? `mg-${props.filter.presetId}` : props.filter.filmId;
+  /** The Margarine look in use, if any: it leads the list as its own selected card. */
+  const activeLook = props.filter.kind === 'margarine'
+    ? MARGARINE_FILTERS.find((filter) => filter.key === `mg-${props.filter.presetId}`) ?? null
+    : null;
   const singleFrames = SINGLE_FRAME_DEFS;
   const multiFrames = MULTI_FRAME_DEFS;
   const frameList = frameMode === 'single' ? singleFrames : multiFrames;
@@ -190,6 +199,29 @@ export function LeftSidebar(props: LeftSidebarProps) {
   useEffect(() => {
     if (props.mediaKind === 'video') setFrameMode('single');
   }, [props.mediaKind]);
+
+  /** One film card: its still, its name, and whether it is the look in use. */
+  const filmCard = (filter: FilterOption, selected: boolean) => (
+    <button
+      key={filter.key}
+      type="button"
+      role="option"
+      aria-selected={selected}
+      className={`side-card${selected ? ' on' : ''}`}
+      onClick={() => props.onSelectFilter(filter)}
+      data-filter-key={filter.key}
+      title={`${filter.name} · ${filter.detail}`}
+    >
+      <span className="side-thumb">
+        <FilmThumb source={props.thumbSource} filter={filter} />
+        {selected && <span className="side-check"><IconCheck size={12} /></span>}
+      </span>
+      <span className="side-text">
+        <b>{filter.name}</b>
+        <small>{filter.detail || filter.key}</small>
+      </span>
+    </button>
+  );
 
   return (
     <aside className="pc-side pc-left" data-testid="pc-left-sidebar" aria-label="필름 · 프레임">
@@ -210,7 +242,7 @@ export function LeftSidebar(props: LeftSidebarProps) {
           onClick={() => props.onTab('film')}
           data-testid="side-tab-film"
         >
-          필름 <span>{ALL_FILTERS.length}</span>
+          필름 <span>{FILM_SHELF.length}</span>
         </button>
         <button
           type="button"
@@ -237,6 +269,20 @@ export function LeftSidebar(props: LeftSidebarProps) {
               format={(value) => `${Math.round(value)}%`}
               onChange={props.onStrength}
             />
+            <button
+              type="button"
+              className={`side-margarine${activeLook ? ' on' : ''}`}
+              onClick={props.onOpenMargarine}
+              data-testid="side-margarine-open"
+              aria-haspopup="dialog"
+            >
+              <span className="side-margarine-mark" aria-hidden><IconFilm size={15} /></span>
+              <span className="side-margarine-text">
+                <b>Margarine 58종</b>
+                <small>{activeLook ? `적용 중 · ${activeLook.name}` : '전용 모달에서 고르기'}</small>
+              </span>
+              <IconChevronRight size={15} />
+            </button>
             <label className="side-search">
               <IconSearch size={14} />
               <input
@@ -248,40 +294,13 @@ export function LeftSidebar(props: LeftSidebarProps) {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
-            <div className="side-chips" role="group" aria-label="필름 그룹">
-              <button type="button" className={`mini-chip${group === 'all' ? ' on' : ''}`} onClick={() => setGroup('all')}>전체</button>
-              <button type="button" className={`mini-chip${group === 'hd2lab' ? ' on' : ''}`} onClick={() => setGroup('hd2lab')}>HD2Lab</button>
-              {MARGARINE_GROUPS.map((name) => (
-                <button key={name} type="button" className={`mini-chip${group === name ? ' on' : ''}`} onClick={() => setGroup(name)}>{name}</button>
-              ))}
-              <button type="button" className={`mini-chip${group === 'retro90' ? ' on' : ''}`} onClick={() => setGroup('retro90')}>RETRO 90</button>
-            </div>
           </div>
 
           <div className="side-list" data-testid="film-list" role="listbox" aria-label="필름 목록">
+            {activeLook && filmCard(activeLook, true)}
             {films.map((filter) => {
               const selected = activeFilterKey === filter.key || (filter.kind === 'film' && props.filter.kind === 'film' && props.filter.filmId === filter.filmId && filter.presetId === null);
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`side-card${selected ? ' on' : ''}`}
-                  onClick={() => props.onSelectFilter(filter)}
-                  data-filter-key={filter.key}
-                  title={`${filter.name} · ${filter.detail}`}
-                >
-                  <span className="side-thumb">
-                    <FilmThumb source={props.thumbSource} filter={filter} />
-                    {selected && <span className="side-check"><IconCheck size={12} /></span>}
-                  </span>
-                  <span className="side-text">
-                    <b>{filter.name}</b>
-                    <small>{filter.detail || filter.key}</small>
-                  </span>
-                </button>
-              );
+              return filmCard(filter, selected);
             })}
             {!films.length && <p className="side-empty">검색에 맞는 필름이 없습니다.</p>}
           </div>
@@ -349,16 +368,16 @@ export function LeftSidebar(props: LeftSidebarProps) {
                 options={[{ value: 'dark', label: 'Dark' }, { value: 'light', label: 'Light' }]}
                 onChange={(value) => props.onPatchFrame({ backdrop: value })}
               />
-              <Segmented
+              <EmblemPicker
+                value={props.frame.emblem}
+                resolved={props.resolvedEmblem}
+                mono={props.frame.emblemMono}
+                backdrop={props.frame.backdrop}
+                emblems={props.emblems}
+                onOpen={props.onOpenEmblem}
                 label="엠블럼"
                 compact
-                value={props.frame.emblem}
-                options={[
-                  { value: 'auto', label: 'Auto' },
-                  { value: 'hd2lab', label: 'HD2Lab' },
-                  { value: 'none', label: '없음' },
-                ]}
-                onChange={(value) => props.onPatchFrame({ emblem: value })}
+                testId="side-emblem-open"
               />
               <Segmented
                 label="엠블럼 잉크"

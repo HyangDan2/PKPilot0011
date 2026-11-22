@@ -102,8 +102,10 @@ test('pc: the landing opens the two-door window, and a file fills the studio', a
   expect(Math.round(boxes.left)).toBe(280);
   expect(Math.round(boxes.right)).toBe(300);
 
-  // The film shelf lists all 69 looks; the frame shelf its single cuts.
-  await expect(page.locator('[data-testid="film-list"] [data-filter-key]')).toHaveCount(69);
+  // The film shelf lists the ten HD2Lab stocks and RETRO 90; the 58 Margarine
+  // looks live behind their own door and open in their own window.
+  await expect(page.locator('[data-testid="film-list"] [data-filter-key]')).toHaveCount(11);
+  await expect(page.locator('[data-testid="side-margarine-open"]')).toContainText('Margarine 58종');
   await page.locator('[data-testid="side-tab-frame"]').click();
   await expect(page.locator('[data-testid="frame-options"]')).toBeVisible();
   await expect(page.locator('[data-testid="frame-list"] [data-frame-id]')).toHaveCount(11);

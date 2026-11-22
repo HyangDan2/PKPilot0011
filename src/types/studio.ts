@@ -53,6 +53,21 @@ export interface PlateMeta {
   caption: string;
 }
 
+/**
+ * The eleven maker marks the plate can print, in the studio's own order:
+ * HD2Lab's house mark first, then the ten camera makers, the way the plate
+ * credits them. The ids are the Shutterplate engine's (`SPEmblems.list`).
+ */
+export const EMBLEM_IDS = [
+  'hd2lab', 'sony', 'canon', 'nikon', 'fujifilm', 'samsung',
+  'leica', 'hasselblad', 'apple', 'lumix', 'omsystem',
+] as const;
+
+export type EmblemId = (typeof EMBLEM_IDS)[number];
+
+/** What the frame prints: follow the file's EXIF, print nothing, or a chosen mark. */
+export type EmblemChoice = 'auto' | 'none' | EmblemId;
+
 export const EMPTY_META: PlateMeta = {
   make: '', model: '', lens: '', focal: '', aperture: '', shutter: '', iso: '', datetime: '', caption: '',
 };
@@ -80,7 +95,7 @@ export interface FrameSettings {
   /** Off = no margin, no band, no emblem: only the graded picture is printed. */
   enabled: boolean;
   style: FrameId;
-  emblem: string;          // 'auto' | 'none' | emblem id
+  emblem: EmblemChoice;    // 'auto' | 'none' | one of the eleven maker marks
   emblemMono: boolean;     // All Black ink
   padPct: number | null;   // null = the frame's own default
   extraPct: number | null;

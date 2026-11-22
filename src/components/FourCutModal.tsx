@@ -3,8 +3,10 @@ import { Modal } from './Modal';
 import { Segmented, Slider, Toggle } from './controls';
 import { Field } from './controls';
 import { FRAME_MAP, FYRA_THEME_LABELS, MULTI_FRAME_DEFS } from '../plate/frames';
+import { EmblemPicker } from './EmblemModal';
 import { IconCheck, IconImage, IconTrash } from './Icons';
 import { MYNDA_URL, customStyleOf, type ShutterFrameSpec } from '../plate/custom';
+import type { SPEmblemsApi } from '../plate/engine';
 import type { FrameId, FrameSettings, MediaInfo, PlateMeta } from '../types/studio';
 
 export interface FourCutModalProps {
@@ -29,6 +31,10 @@ export interface FourCutModalProps {
   onDeleteCustom: (id: string) => void;
   onApply: () => void;
   onClose: () => void;
+  /** The emblem window behind the emblem row. */
+  emblems: SPEmblemsApi | null;
+  resolvedEmblem: string;
+  onOpenEmblem: () => void;
 }
 
 /**
@@ -258,15 +264,16 @@ export function FourCutModal(props: FourCutModalProps) {
           onChange={(value) => props.onPatch({ padPct: value })}
           hint={`이 프레임의 기본 여백은 ${props.defaultPad.toFixed(1)}%입니다.`}
         />
-        <Segmented
-          label="엠블럼"
+        <EmblemPicker
           value={frame.emblem}
-          options={[
-            { value: 'auto', label: 'Auto · 메이커' },
-            { value: 'hd2lab', label: 'HD2Lab' },
-            { value: 'none', label: '없음' },
-          ]}
-          onChange={(value) => props.onPatch({ emblem: value })}
+          resolved={props.resolvedEmblem}
+          mono={frame.emblemMono}
+          backdrop={frame.backdrop}
+          emblems={props.emblems}
+          onOpen={props.onOpenEmblem}
+          label="엠블럼"
+          compact
+          testId="fourcut-emblem-open"
         />
         <Segmented
           label="엠블럼 잉크"
