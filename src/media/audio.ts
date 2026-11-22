@@ -22,7 +22,7 @@
  *
  * The analyser is not decoration: it is how a test can prove real PCM came out
  * of the graph, not just that a flag flipped. The measured level is published on
- * `window.__nordlysAudio` while the monitor runs.
+ * `window.__cineplateAudio` while the monitor runs.
  */
 
 interface AudioGraph {
@@ -55,7 +55,7 @@ export interface AudioDiagnostics {
 
 declare global {
   interface Window {
-    __nordlysAudio?: AudioDiagnostics;
+    __cineplateAudio?: AudioDiagnostics;
   }
 }
 
@@ -220,7 +220,7 @@ function stopMonitor(): void {
 
 function publish(video: HTMLVideoElement, graph: AudioGraph | null, rms = 0, peak = 0): void {
   if (typeof window === 'undefined') return;
-  window.__nordlysAudio = {
+  window.__cineplateAudio = {
     context: graph ? graph.context.state : (context?.state ?? 'unavailable'),
     routed: isAudioRouted(video),
     muted: video.muted,

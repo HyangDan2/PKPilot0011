@@ -62,17 +62,17 @@ async function expectNoOverlap(page: Page, a: string, b: string) {
   expect(overlapX <= 1 || overlapY <= 1, `${a} overlaps ${b}`).toBe(true);
 }
 
-test('landing: Nordlys lockup, one open card, the corner cluster and both palettes', async ({ page }) => {
+test('landing: CinePlate lockup, one open card, the corner cluster and both palettes', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
   const console = watch(page);
   await page.setViewportSize({ width: 1000, height: 800 });
   await page.goto('/');
 
-  await expect(page).toHaveTitle(/Nordlys/);
+  await expect(page).toHaveTitle(/CinePlate/);
   // The landing carries the same Web-HQ lockup as the editor: CSS dual-skew
   // mark, wordmark, and the product name behind a rule.
   await expect(page.locator('.landing-top .brand-name')).toHaveText('HD2Lab');
-  await expect(page.locator('.landing-top .brand em')).toHaveText('Nordlys');
+  await expect(page.locator('.landing-top .brand em')).toHaveText('CinePlate');
   await expect(page.locator('.landing-top .brand-badge')).toHaveText('STUDIO');
   const landingLockup = await page.evaluate(() => {
     const mark = document.querySelector('.landing-top .mark') as HTMLElement;
@@ -106,13 +106,13 @@ test('landing: Nordlys lockup, one open card, the corner cluster and both palett
   await expect(page.locator('[data-testid="float-cluster"] [data-testid="theme-fab"]')).toHaveCount(1);
   await expect(page.locator('[data-testid="colorlab-fab"]')).toHaveCount(0);
 
-  await shot(page, 'nordlys_landing.png');
+  await shot(page, 'cineplate_landing.png');
 
   // The floating toggle owns the whole UI's palette.
   await page.locator('[data-testid="theme-fab"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.waitForTimeout(350);
-  await shot(page, 'nordlys_landing_light.png');
+  await shot(page, 'cineplate_landing_light.png');
   await page.locator('[data-testid="theme-fab"]').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
@@ -189,12 +189,12 @@ test('landing header: the editor title bar, both portal doors and the ⋮ menu',
   expect(hero.svg).toBe(1);
   expect(hero.markBox.w).toBe(62);
   expect(hero.markBox.h).toBe(62);
-  expect(hero.title).toBe('Nordlys');
+  expect(hero.title).toBe('CinePlate');
   expect(hero.badge).toBe('HD2Lab');
   expect(hero.headline).toContain('하나의 플레이트로');
   expect(hero.stats).toEqual(['13', '69', '4K', '0 B']);
 
-  await shot(page, 'nordlys_landing_v2.png');
+  await shot(page, 'cineplate_landing_v2.png');
 
   // ── the landing's ⋮ carries the workspace, samples and both portals ──
   await page.locator('.landing-top [data-testid="nav-menu-button"]').click();
@@ -207,7 +207,7 @@ test('landing header: the editor title bar, both portal doors and the ⋮ menu',
   // nothing is open yet, so the media-clearing entries are honestly disabled
   await expect(menu.getByRole('menuitem', { name: /미디어 비우기/ })).toBeDisabled();
   await page.waitForTimeout(260);
-  await shot(page, 'nordlys_landing_nav_menu.png');
+  await shot(page, 'cineplate_landing_nav_menu.png');
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="nav-menu"]')).toHaveCount(0);
 
@@ -261,7 +261,7 @@ test('mobile 390×844: the landing bar keeps one row, portals fold into ⋮', as
   await expect(page.locator('[data-testid="landing-sample"]')).toBeHidden();
   await expect(page.locator('[data-testid="landing-open"]')).toBeVisible();
   await expect(page.locator('[data-testid="theme-fab"]')).toBeVisible();
-  await shot(page, 'nordlys_landing_mobile_v2.png');
+  await shot(page, 'cineplate_landing_mobile_v2.png');
 
   await page.locator('.landing-top [data-testid="nav-menu-button"]').click();
   const menu = page.locator('[data-testid="nav-menu"]');
@@ -272,7 +272,7 @@ test('mobile 390×844: the landing bar keeps one row, portals fold into ⋮', as
   expect(menuBox!.x).toBeGreaterThanOrEqual(0);
   expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(390);
   await page.waitForTimeout(260);
-  await shot(page, 'nordlys_landing_mobile_menu.png');
+  await shot(page, 'cineplate_landing_mobile_menu.png');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
@@ -287,7 +287,7 @@ test('wide editor (1000×800): title-backdrop slide, strip, cluster, and no corn
   // The Shutterplate lockup: a CSS dual-skew mark, the wordmark, and the
   // product name behind a rule — never a typed "|" character.
   await expect(page.locator('.topbar .brand-name')).toHaveText('HD2Lab');
-  await expect(page.locator('.topbar .brand em')).toHaveText('Nordlys');
+  await expect(page.locator('.topbar .brand em')).toHaveText('CinePlate');
   const lockup = await page.evaluate(() => {
     const mark = document.querySelector('.topbar .mark') as HTMLElement;
     const name = document.querySelector('.topbar .brand-name') as HTMLElement;
@@ -366,8 +366,8 @@ test('wide editor (1000×800): title-backdrop slide, strip, cluster, and no corn
   await page.waitForTimeout(600);
   // Clicking a card scrolls the strip; a screenshot should show it from its start.
   await resetStrip(page);
-  await shot(page, 'nordlys_desktop.png');
-  await shot(page, 'nordlys_desktop_v5.png');
+  await shot(page, 'cineplate_desktop.png');
+  await shot(page, 'cineplate_desktop_v5.png');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
@@ -389,7 +389,7 @@ test('navigation menu: workspace, samples and portal links', async ({ page }) =>
   await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toHaveCount(1);
   await expect(menu.locator('a[href="https://hyangdan2.github.io/ApplicationHub/"]')).toHaveCount(1);
   await page.waitForTimeout(260);
-  await shot(page, 'nordlys_nav_menu.png');
+  await shot(page, 'cineplate_nav_menu.png');
 
   // Emblem ink toggles from the menu and the badge says which way it went.
   await menu.getByRole('menuitemcheckbox', { name: /엠블럼 색상/ }).click();
@@ -413,7 +413,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await expect(page.locator('[data-testid="frame-modal"] [data-frame-id="contact"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="frame-modal"] [data-frame-id="fyra04"]')).toHaveCount(0);
   await expect.poll(async () => page.locator('.frame-thumb img').count(), { timeout: 30_000 }).toBe(11);
-  await shotSheet(page, 'nordlys_frame_modal.png');
+  await shotSheet(page, 'cineplate_frame_modal.png');
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="frame-modal"]')).toHaveCount(0);
 
@@ -426,7 +426,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await expect(page.locator('[data-testid="fourcut-modal"] .segmented', { hasText: 'FYRA 테마' }).locator('button')).toHaveCount(10);
   await expect(page.locator('[data-testid="fourcut-modal"]')).toContainText('Midnight');
   await page.waitForTimeout(800);
-  await shotSheet(page, 'nordlys_fourcut_modal.png');
+  await shotSheet(page, 'cineplate_fourcut_modal.png');
 
   // Fill the empty slots from the picker, then apply.
   const before = await page.locator('[data-testid="fourcut-modal"] .fourcut-slot.filled').count();
@@ -446,7 +446,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await page.locator('[data-testid="colorlab-fab"]').click();
   await expect(page.locator('[data-testid="colorlab-modal"]')).toBeVisible();
   await expect(page.locator('[data-testid="colorlab-modal"] .band-dot')).toHaveCount(8);
-  await shotSheet(page, 'nordlys_colorlab_modal.png');
+  await shotSheet(page, 'cineplate_colorlab_modal.png');
   await page.keyboard.press('Escape');
 
   await page.locator('[data-testid="tonecurve-fab"]').click();
@@ -480,7 +480,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   expect(Math.abs(curveBox!.centreDy)).toBeLessThanOrEqual(1);
   expect(curveBox!.fits).toBe(true);
   expect(curveBox!.expanded).toBe('true');
-  await shotSheet(page, 'nordlys_tonecurve_overlay.png');
+  await shotSheet(page, 'cineplate_tonecurve_overlay.png');
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="tonecurve-overlay"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="tonecurve-fab"]')).toHaveAttribute('aria-expanded', 'false');
@@ -489,7 +489,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await expect(page.locator('[data-testid="cameraeffects-modal"]')).toBeVisible();
   await expect(page.locator('[data-testid="cameraeffects-modal"]')).toContainText('날짜 각인');
   await expect(page.locator('[data-testid="cameraeffects-modal"]')).toContainText('광학 효과');
-  await shotSheet(page, 'nordlys_cameraeffects_modal.png');
+  await shotSheet(page, 'cineplate_cameraeffects_modal.png');
   await page.keyboard.press('Escape');
 
   // ── the grade panel keeps only light / colour / texture / video ──
@@ -497,7 +497,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await expect(page.locator('[data-testid="adjust-modal"]')).toBeVisible();
   const tabs = await page.locator('[data-testid="adjust-modal"] .chip-row .chip').allTextContents();
   expect(tabs).toEqual(['빛', '색', '질감', '영상'].filter((label) => label !== '영상'));
-  await shotSheet(page, 'nordlys_adjust_modal.png');
+  await shotSheet(page, 'cineplate_adjust_modal.png');
   await page.keyboard.press('Escape');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
@@ -514,15 +514,15 @@ test('export: prepare first, then one save/share tap', async ({ page }) => {
   await expect(page.locator('[data-testid="export-modal"]')).toBeVisible();
   // The still is made on open, so the button already holds a file.
   await expect(page.locator('[data-testid="save-share"]')).toBeEnabled({ timeout: 30_000 });
-  await expect(page.locator('[data-testid="export-modal"]')).toContainText('-Nordlys.jpg');
+  await expect(page.locator('[data-testid="export-modal"]')).toContainText('-CinePlate.jpg');
   await expect(page.locator('.export-foot .link-btn')).toBeVisible();
-  await shotSheet(page, 'nordlys_export_modal.png');
+  await shotSheet(page, 'cineplate_export_modal.png');
 
   const download = page.waitForEvent('download', { timeout: 20_000 });
   await page.locator('[data-testid="save-share"]').click();
   const file = await download;
-  expect(file.suggestedFilename()).toContain('-Nordlys');
-  const path = resolve(SHOT_DIR, 'nordlys_still_export.jpg');
+  expect(file.suggestedFilename()).toContain('-CinePlate');
+  const path = resolve(SHOT_DIR, 'cineplate_still_export.jpg');
   await file.saveAs(path);
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
@@ -547,12 +547,12 @@ test('video: sound toggle, plate legibility and an export that keeps its audio',
     const video = document.querySelector('video.source-video') as HTMLVideoElement | null;
     return video ? video.muted : true;
   })).toBe(false);
-  await expect.poll(async () => page.evaluate(() => window.__nordlysAudio?.rms ?? 0), {
+  await expect.poll(async () => page.evaluate(() => window.__cineplateAudio?.rms ?? 0), {
     message: 'the toggle should put real PCM through the graph', timeout: 10_000,
   }).toBeGreaterThan(0.01);
   await page.waitForTimeout(700);
   await resetStrip(page);
-  await shot(page, 'nordlys_video.png');
+  await shot(page, 'cineplate_video.png');
 
   // A clip with no EXIF still prints a full spec row.
   const plateSpecial = await page.locator('[data-testid="plate-canvas"]').getAttribute('data-plate-size');
@@ -564,13 +564,13 @@ test('video: sound toggle, plate legibility and an export that keeps its audio',
   await expect(page.locator('[data-testid="save-share"]')).toBeDisabled();
   await page.getByRole('button', { name: /영상 준비/ }).click();
   await expect(page.locator('[data-testid="save-share"]')).toBeEnabled({ timeout: 200_000 });
-  await expect(page.locator('[data-testid="export-modal"]')).toContainText('Nordlys');
+  await expect(page.locator('[data-testid="export-modal"]')).toContainText('CinePlate');
 
   const download = page.waitForEvent('download', { timeout: 30_000 });
   await page.locator('[data-testid="save-share"]').click();
   const file = await download;
   const name = file.suggestedFilename();
-  const out = resolve(SHOT_DIR, name.endsWith('.webm') ? 'nordlys_export_probe.webm' : 'nordlys_export_probe.mp4');
+  const out = resolve(SHOT_DIR, name.endsWith('.webm') ? 'cineplate_export_probe.webm' : 'cineplate_export_probe.mp4');
   await file.saveAs(out);
   process.stdout.write(`[export] ${name} → ${out}\n`);
 
@@ -658,15 +658,15 @@ test('mobile 390×844: the strip, the cluster and readable plate copy', async ({
   await expect(page.locator('[data-testid="utility-bar"] [data-testid="fourcut-fab"]')).toBeVisible();
   await expect(page.locator('[data-testid="backdrop-switch"]')).toBeVisible();
 
-  await page.screenshot({ path: resolve(SHOT_DIR, 'nordlys_v3_mobile.png') });
-  await page.locator('[data-testid="plate-canvas"]').screenshot({ path: resolve(SHOT_DIR, 'nordlys_v3_mobile_plate.png') });
+  await page.screenshot({ path: resolve(SHOT_DIR, 'cineplate_v3_mobile.png') });
+  await page.locator('[data-testid="plate-canvas"]').screenshot({ path: resolve(SHOT_DIR, 'cineplate_v3_mobile_plate.png') });
 
   await expect(page.locator('[data-testid="filter-strip"] .strip-card')).toHaveCount(12);
   await page.locator('[data-testid="filter-strip"] [data-filter-key="FS-004"]').click();
 
   await page.locator('[data-testid="fourcut-fab"]').click();
   await expect(page.locator('[data-testid="fourcut-modal"]')).toBeVisible();
-  await shotSheet(page, 'nordlys_v3_mobile_fourcut.png');
+  await shotSheet(page, 'cineplate_v3_mobile_fourcut.png');
   await page.keyboard.press('Escape');
 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);

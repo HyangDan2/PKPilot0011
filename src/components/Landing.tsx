@@ -86,12 +86,12 @@ export function Landing(props: LandingProps) {
           type="button"
           className="brand"
           onClick={toTop}
-          aria-label="Nordlys 홈 — 화면 맨 위로"
-          title="Nordlys 홈 — 화면 맨 위로"
+          aria-label="CinePlate 홈 — 화면 맨 위로"
+          title="CinePlate 홈 — 화면 맨 위로"
         >
           <span className="mark" aria-hidden />
           <span className="brand-name">HD2Lab</span>
-          <em>Nordlys</em>
+          <em>CinePlate</em>
         </button>
         <span className="brand-badge">STUDIO</span>
 
@@ -165,7 +165,7 @@ export function Landing(props: LandingProps) {
         <section className="hero">
           <span className="hero-mark" aria-hidden><HD2LabMark size={36} /></span>
           <div className="hero-title-row">
-            <h1>Nordlys</h1>
+            <h1>CinePlate</h1>
             <span className="brand-badge hero-badge">HD2Lab</span>
           </div>
           <p className="hero-kicker">FILM STUDIO × SHUTTERPLATE</p>
@@ -284,7 +284,7 @@ export function Landing(props: LandingProps) {
         </section>
 
         <footer className="landing-foot">
-          <span>HD2Lab · Nordlys — Film Studio × Shutterplate</span>
+          <span>HD2Lab · CinePlate — Film Studio × Shutterplate</span>
           <span>브라우저 로컬 처리 · WebGL2 + WebCodecs</span>
         </footer>
       </div>

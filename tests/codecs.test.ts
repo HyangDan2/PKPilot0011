@@ -74,7 +74,7 @@ describe('frameTimestamps', () => {
 
 describe('outputFileName', () => {
   it('keeps the stem and appends the studio’s name', () => {
-    expect(outputFileName('sample-clip.mp4', 'mp4')).toBe('sample-clip-Nordlys.mp4');
-    expect(outputFileName('no-extension', 'webm')).toBe('no-extension-Nordlys.webm');
+    expect(outputFileName('sample-clip.mp4', 'mp4')).toBe('sample-clip-CinePlate.mp4');
+    expect(outputFileName('no-extension', 'webm')).toBe('no-extension-CinePlate.webm');
   });
 });

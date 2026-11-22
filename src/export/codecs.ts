@@ -135,7 +135,7 @@ export function fileExtension(plan: EncodePlan): string {
 
 export function outputFileName(sourceName: string, extension: string): string {
   const stem = sourceName.replace(/\.[^.]+$/, '') || 'clip';
-  return `${stem}-Nordlys.${extension}`;
+  return `${stem}-CinePlate.${extension}`;
 }
 
 /**

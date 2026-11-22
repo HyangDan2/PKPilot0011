@@ -83,7 +83,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
       const blob = await blobOf(canvas, format, quality);
       return {
         blob,
-        filename: `${stem}-Nordlys.${format === 'png' ? 'png' : 'jpg'}`,
+        filename: `${stem}-CinePlate.${format === 'png' ? 'png' : 'jpg'}`,
         width: canvas.width,
         height: canvas.height,
       };
@@ -120,7 +120,7 @@ export async function exportStill(context: StillExportContext, format: 'jpeg' | 
     const blob = await blobOf(canvas, format, quality);
     return {
       blob,
-      filename: `${stem}-Nordlys.${format === 'png' ? 'png' : 'jpg'}`,
+      filename: `${stem}-CinePlate.${format === 'png' ? 'png' : 'jpg'}`,
       width: canvas.width,
       height: canvas.height,
     };
