@@ -201,7 +201,7 @@ test('landing header: the editor title bar, both portal doors and the ⋮ menu',
   const menu = page.locator('[data-testid="nav-menu"]');
   await expect(menu).toBeVisible();
   await expect(menu.locator('.portal-menu-head')).toHaveText(['WORKSPACE', 'SAMPLES', 'NAVIGATION']);
-  await expect(menu.locator('.portal-item')).toHaveCount(11);
+  await expect(menu.locator('.portal-item')).toHaveCount(13);
   await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toHaveCount(1);
   await expect(menu.locator('a[href="https://hyangdan2.github.io/ApplicationHub/"]')).toHaveCount(1);
   // nothing is open yet, so the media-clearing entries are honestly disabled
@@ -317,12 +317,12 @@ test('wide editor (1000×800): title-backdrop slide, strip, cluster, and no corn
   // Title slide = the viewport behind the plate (frame.backdrop), not the app theme.
   const theme = await page.evaluate(() => document.documentElement.dataset.theme);
   await expect(page.locator('.stage')).toHaveClass(/backdrop-dark/);
-  // The slide sits in the actions row, immediately left of 교체.
+  // The slide sits in the actions row, immediately left of the 파일 menu.
   const order = await page.evaluate(() => {
     const left = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().left;
     return {
       backdrop: left('[data-testid="backdrop-switch"]'),
-      replace: left('[data-testid="replace-button"]'),
+      replace: left('[data-testid="file-button"]'),
       menu: left('[data-testid="nav-menu-button"]'),
     };
   });
@@ -360,7 +360,7 @@ test('wide editor (1000×800): title-backdrop slide, strip, cluster, and no corn
 
   // The trash is gone; replace + menu took its place.
   await expect(page.locator('.topbar-actions [aria-label="미디어 닫기"]')).toHaveCount(0);
-  await expect(page.locator('[data-testid="replace-button"]')).toBeVisible();
+  await expect(page.locator('[data-testid="file-button"]')).toBeVisible();
   await expect(page.locator('[data-testid="nav-menu-button"]')).toBeVisible();
 
   await page.waitForTimeout(600);
@@ -383,7 +383,7 @@ test('navigation menu: workspace, samples and portal links', async ({ page }) =>
   await expect(page.locator('[data-testid="nav-menu"]')).toBeVisible();
   const menu = page.locator('[data-testid="nav-menu"]');
   await expect(menu.locator('.portal-menu-head')).toHaveText(['WORKSPACE', 'SAMPLES', 'NAVIGATION']);
-  await expect(menu.locator('.portal-item')).toHaveCount(11);
+  await expect(menu.locator('.portal-item')).toHaveCount(13);
   await expect(menu.getByRole('menuitem', { name: /EXIF 값으로 되돌리기/ })).toBeEnabled();
   await expect(menu.getByRole('menuitem', { name: /미디어 비우기/ })).toBeEnabled();
   await expect(menu.locator('a[href="https://hyangdan2.github.io/"]')).toHaveCount(1);
@@ -420,7 +420,7 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   // ── the 4-cut window: two plates, four slots, ten themes ──
   await page.locator('[data-testid="fourcut-fab"]').click();
   await expect(page.locator('[data-testid="fourcut-modal"]')).toBeVisible();
-  await expect(page.locator('[data-testid="fourcut-modal"] .frame-card')).toHaveCount(2);
+  await expect(page.locator('[data-testid="fourcut-modal"] .frame-card')).toHaveCount(3);
   await expect(page.locator('[data-testid="fourcut-modal"] .fourcut-slot')).toHaveCount(4);
   await page.locator('[data-testid="fourcut-modal"] [data-frame-id="fyra04"]').click();
   await expect(page.locator('[data-testid="fourcut-modal"] .segmented', { hasText: 'FYRA 테마' }).locator('button')).toHaveCount(10);
@@ -428,9 +428,9 @@ test('modals: eleven single frames, the 4-cut window, and the three effect sheet
   await page.waitForTimeout(800);
   await shotSheet(page, 'cineplate_fourcut_modal.png');
 
-  // Fill the empty slots from the picker, then apply.
+  // Fill the empty slots from the window's own add door (the only multiple picker).
   const before = await page.locator('[data-testid="fourcut-modal"] .fourcut-slot.filled').count();
-  await page.locator('[data-testid="fourcut-modal"] input[type="file"]').first().setInputFiles([
+  await page.locator('[data-testid="fourcut-modal"] input[type="file"][multiple]').setInputFiles([
     resolve(SAMPLE_DIR, 'landscape_test.png'),
     resolve(SAMPLE_DIR, 'color_chart.png'),
   ]);

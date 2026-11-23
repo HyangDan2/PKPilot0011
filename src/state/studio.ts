@@ -113,7 +113,9 @@ export type StudioAction =
   | { type: 'set-theme'; theme: 'dark' | 'light' }
   | { type: 'set-input-guard'; guard: 0 | 1 }
   | { type: 'restore-session'; session: StudioSession }
-  | { type: 'reset-grade' };
+  | { type: 'reset-grade' }
+  /** "초기화": the whole edit back to its first state, the file kept on the plate. */
+  | { type: 'reset-session'; duration?: number };
 
 function withGradeSelection(state: StudioState, filter: FilterSelection): StudioState {
   const grade = gradeForFilter(filter, state.grade.camera);
@@ -258,6 +260,33 @@ export function studioReducer(state: StudioState, action: StudioAction): StudioS
         inputGuard: action.session.inputGuard,
         revision: state.revision + 1,
       };
+    case 'reset-session': {
+      // The file stays: only what the visitor did to it goes back. The two
+      // display preferences — the viewport backdrop and the emblem ink — are
+      // kept, the way the app theme is; they are how the studio is viewed, not
+      // what was drawn on the plate.
+      const grade = gradeForFilter(DEFAULT_FILTER);
+      const active = state.media[state.activePhoto] ?? state.media[0] ?? null;
+      return {
+        ...state,
+        filter: DEFAULT_FILTER,
+        grade: {
+          adjustments: { ...grade.adjustments },
+          camera: grade.camera,
+          curves: defaultCurves(),
+          colorMixer: defaultColorMixer(),
+          sharpening: { ...DEFAULT_SHARPENING },
+          filmId: grade.filmId,
+        },
+        frame: { ...DEFAULT_FRAME, backdrop: state.frame.backdrop, emblemMono: state.frame.emblemMono },
+        trim: active?.kind === 'video'
+          ? { start: 0, end: action.duration || active.duration }
+          : { start: 0, end: 0 },
+        currentTime: 0,
+        inputGuard: 0,
+        revision: state.revision + 1,
+      };
+    }
     case 'reset-grade': {
       const grade = gradeForFilter(state.filter, DEFAULT_CAMERA);
       return {

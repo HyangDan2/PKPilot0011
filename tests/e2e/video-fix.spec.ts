@@ -299,7 +299,7 @@ test('mobile 390×844: the sound toggle answers the tap, never the long press', 
     const topbar = document.querySelector('.topbar') as HTMLElement;
     const brand = document.querySelector('.topbar .brand') as HTMLElement;
     const backdrop = document.querySelector('[data-testid="backdrop-switch"]') as HTMLElement;
-    const replace = document.querySelector('[data-testid="replace-button"]') as HTMLElement;
+    const replace = document.querySelector('[data-testid="file-button"]') as HTMLElement;
     const menu = document.querySelector('[data-testid="nav-menu-button"]') as HTMLElement;
     const rect = (element: HTMLElement) => element.getBoundingClientRect();
     return {

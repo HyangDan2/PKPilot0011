@@ -93,6 +93,30 @@ describe('studio reducer', () => {
     expect(state.grade.adjustments.filmStrength).toBe(100);
   });
 
+  it('초기화 puts the whole edit back while the file stays on the plate', () => {
+    let state = studioReducer(initialStudio(), { type: 'open-video', media: video });
+    state = studioReducer(state, { type: 'select-filter', filter: { kind: 'film', filmId: 'FS-010', presetId: null } });
+    state = studioReducer(state, { type: 'patch-adjustments', patch: { exposure: 1.4 } });
+    state = studioReducer(state, { type: 'set-frame', patch: { style: 'film', padPct: 8, showSpec: false, backdrop: 'light' } });
+    state = studioReducer(state, { type: 'set-trim', trim: { start: 1.5, end: 4 } });
+    state = studioReducer(state, { type: 'set-input-guard', guard: 1 });
+    const revision = state.revision;
+
+    state = studioReducer(state, { type: 'reset-session', duration: 6.2 });
+    expect(state.media).toHaveLength(1);
+    expect(state.filter.filmId).toBe('FS-004');
+    expect(state.grade.adjustments.exposure).toBe(0);
+    expect(state.frame.style).toBe('gallery');
+    expect(state.frame.padPct).toBeNull();
+    expect(state.frame.showSpec).toBe(true);
+    // The whole clip again, and the frame's own no-grain state.
+    expect(state.trim).toEqual({ start: 0, end: 6.2 });
+    expect(state.inputGuard).toBe(0);
+    // How the studio is viewed is kept: the viewport backdrop, the emblem ink.
+    expect(state.frame.backdrop).toBe('light');
+    expect(state.revision).toBe(revision + 1);
+  });
+
   it('toggles the theme and modal state', () => {
     let state = studioReducer(initialStudio(), { type: 'set-theme', theme: 'light' });
     state = studioReducer(state, { type: 'open-modal', modal: 'filter' });

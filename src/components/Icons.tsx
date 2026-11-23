@@ -134,6 +134,15 @@ export const IconSwap = (p: IconProps) => (
   </svg>
 );
 
+/** File — the title bar's file menu: 사진 · 영상 불러오기 · 초기화. */
+export const IconFile = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M13.5 3.5H6.8a1.3 1.3 0 0 0-1.3 1.3v14.4a1.3 1.3 0 0 0 1.3 1.3h10.4a1.3 1.3 0 0 0 1.3-1.3V8.2z" />
+    <path d="M13.5 3.5v4.7h5" />
+    <path d="M8.8 13h6.4M8.8 16.4h4.2" />
+  </svg>
+);
+
 export const IconDots = (p: IconProps) => (
   <svg {...base(p)}>
     <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
