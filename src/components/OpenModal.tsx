@@ -77,7 +77,7 @@ export function OpenModal(props: OpenModalProps) {
         className="modal-panel open-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="열기"
+        aria-label="사진 · 영상 불러오기"
         tabIndex={-1}
         ref={panel}
         data-testid="open-modal"
@@ -85,8 +85,8 @@ export function OpenModal(props: OpenModalProps) {
         <header className="modal-head">
           <div>
             <p className="modal-kicker">OPEN</p>
-            <h2>열고 교체하기</h2>
-            <p className="modal-desc">사진·동영상 파일을 바로 열거나, 폴더를 워크스페이스로 불러와 스트립에서 탐색합니다.</p>
+            <h2>사진 · 영상 불러오기</h2>
+            <p className="modal-desc">지금 플레이트를 새 파일로 바꾸거나, 폴더를 워크스페이스로 불러와 스트립에서 탐색합니다.</p>
           </div>
           <button type="button" className="icon-btn ghost" onClick={props.onClose} aria-label="닫기">
             <IconClose size={20} />

@@ -299,7 +299,7 @@ test('4-cut slots live in the window only, and survive the trip to a single fram
   await page.locator('[data-testid="fourcut-fab"]').click();
   await expect(page.locator('[data-testid="fourcut-modal"]')).toBeVisible();
   await page.locator('[data-testid="fourcut-modal"] [data-frame-id="contact"]').click();
-  await page.locator('[data-testid="fourcut-modal"] input[type="file"]').first().setInputFiles([
+  await page.locator('[data-testid="fourcut-modal"] input[type="file"][multiple]').setInputFiles([
     resolve(SAMPLE_DIR, 'landscape_test.png'),
     resolve(SAMPLE_DIR, 'color_chart.png'),
     resolve(SAMPLE_DIR, 'portrait_test.png'),

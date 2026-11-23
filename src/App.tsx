@@ -10,6 +10,7 @@ import { FourCutModal } from './components/FourCutModal';
 import { AdjustModal } from './components/AdjustModal';
 import { ExportModal } from './components/ExportModal';
 import { NavMenu } from './components/NavMenu';
+import { FileMenu } from './components/FileMenu';
 import { FilterStrip, STRIP_FILTERS } from './components/FilterStrip';
 import { ColorLabModal } from './components/ColorLabModal';
 import { ToneCurveOverlay, curvesTouched } from './components/ToneCurveOverlay';
@@ -20,7 +21,7 @@ import { LeftSidebar, type SideTab } from './components/LeftSidebar';
 import { RightSidebar } from './components/RightSidebar';
 import { WorkspaceStrip } from './components/WorkspaceStrip';
 import {
-  IconCamera, IconDownload, IconFilm, IconFrame, IconPalette, IconPause, IconPlay, IconPlayback, IconSliders, IconSpline, IconSwap,
+  IconCamera, IconDownload, IconFilm, IconFrame, IconPalette, IconPause, IconPlay, IconPlayback, IconSliders, IconSpline,
 } from './components/Icons';
 import { initialStudio, sessionOf, studioReducer, type StudioSession } from './state/studio';
 import { loadPlateEngine, type SPEmblemsApi, type SPPlateApi } from './plate/engine';
@@ -1170,7 +1171,20 @@ export default function App() {
   );
 
   /** Asking for a file: a modal on a wide screen, the plain picker on a phone. */
-  const requestOpen = () => { if (isPC) setOpenModal(true); };
+  const requestOpen = () => { if (isPC) setOpenModal(true); else replaceRef.current?.click(); };
+
+  /**
+   * 초기화: the edit on the plate goes back to its first state — the studio's own
+   * first stock, no adjustments, the default frame, the whole clip, the file's
+   * own EXIF — and the file itself stays open, so it can be edited again.
+   */
+  const resetSession = useCallback(() => {
+    dispatch({ type: 'reset-session', duration: activeMedia?.duration });
+    setMetaOverride({});
+    setFourCutThumbs({});
+    setFrameThumbs({});
+    setNotice('편집을 처음 상태로 되돌렸습니다. 파일은 그대로 있습니다.');
+  }, [activeMedia?.duration]);
 
   /* ── landing ────────────────────────────────────────────────────────────── */
   if (engineError) {
@@ -1302,15 +1316,7 @@ export default function App() {
             backdrop={state.frame.backdrop}
             onChange={(backdrop) => dispatch({ type: 'set-frame', patch: { backdrop } })}
           />
-          <button
-            type="button"
-            className="chip swap-btn"
-            onClick={() => (isPC ? setOpenModal(true) : replaceRef.current?.click())}
-            aria-label="사진 · 영상 교체"
-            data-testid="replace-button"
-          >
-            <IconSwap size={14} /> <span className="chip-label">교체</span>
-          </button>
+          <FileMenu busy={!!busy} onOpen={requestOpen} onReset={resetSession} />
           {isPC && saveShareChip}
           <NavMenu
             hasMedia={state.media.length > 0}

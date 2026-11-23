@@ -84,7 +84,7 @@ test('pc: the landing opens the two-door window, and a file fills the studio', a
   await expect(page.locator('[data-testid="open-modal"]')).toHaveCount(0);
   await waitForPlate(page);
 
-  // Three columns, no dock, no bottom strip, and the save door beside 교체.
+  // Three columns, no dock, no bottom strip, and the save door beside 파일.
   await expect(page.locator('[data-testid="studio-pc"]')).toBeVisible();
   await expect(page.locator('[data-testid="pc-left-sidebar"]')).toBeVisible();
   await expect(page.locator('[data-testid="pc-right-sidebar"]')).toBeVisible();
@@ -259,14 +259,14 @@ test('pc: the right rail carries the whole grade and its three doors', async ({ 
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
 
-test('pc: 저장 / 공유 sits beside 교체 and opens the export sheet', async ({ page }) => {
+test('pc: 저장 / 공유 sits beside 파일 and opens the export sheet', async ({ page }) => {
   const console = watch(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await page.locator('.sample-card.photo').first().click();
   await waitForPlate(page);
 
-  const swap = (await page.locator('[data-testid="replace-button"]').boundingBox())!;
+  const swap = (await page.locator('[data-testid="file-button"]').boundingBox())!;
   const save = (await page.locator('[data-testid="topbar-save"]').boundingBox())!;
   expect(Math.round(save.x - (swap.x + swap.width))).toBeLessThanOrEqual(12);
   expect(Math.abs((save.y + save.height / 2) - (swap.y + swap.height / 2))).toBeLessThan(4);
@@ -278,10 +278,14 @@ test('pc: 저장 / 공유 sits beside 교체 and opens the export sheet', async 
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-testid="export-modal"]')).toHaveCount(0);
 
-  // 교체 asks the same two-door window as the landing.
-  await page.locator('[data-testid="replace-button"]').click();
+  // The file door asks the same two-door window as the landing, one press later.
+  await page.locator('[data-testid="file-button"]').click();
+  await expect(page.locator('[data-testid="file-menu"]')).toBeVisible();
+  await page.locator('[data-testid="file-menu-open"]').click();
   await expect(page.locator('[data-testid="open-modal"]')).toBeVisible();
+  await expect(page.locator('[data-testid="open-modal"]')).toContainText('사진 · 영상 불러오기');
   await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="open-modal"]')).toHaveCount(0);
   expect(console.errors, console.errors.join(' | ')).toEqual([]);
 });
 

@@ -100,7 +100,7 @@ export function NavMenu(props: NavMenuProps) {
         <div className="portal-menu-dropdown" id="studio-nav-menu" role="menu" data-testid="nav-menu">
           <p className="portal-menu-head">WORKSPACE</p>
           <Item icon={<IconHome size={15} />} title="홈 / 랜딩 화면" hint="시작 화면으로 이동" badge="HOME" onClick={run(props.onHome)} />
-          <Item icon={<IconImage size={15} />} title="사진 · 영상 교체" hint="지금 편집 중인 미디어를 새 파일로" badge="SWAP" onClick={run(props.onReplace)} />
+          <Item icon={<IconImage size={15} />} title="사진 · 영상 불러오기" hint="새 파일을 골라 엽니다" badge="OPEN" onClick={run(props.onReplace)} />
           <Item
             icon={<IconRefresh size={15} />}
             title="EXIF 값으로 되돌리기"
